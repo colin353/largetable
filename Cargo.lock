@@ -1,4 +1,21 @@
 [root]
 name = "largetable"
 version = "0.1.0"
+dependencies = [
+ "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
+[[package]]
+name = "byteorder"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "protobuf"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c40977b0ee6b9885c9013cd41d9feffdd22deb3bb4dc3a71d901cc7a77de18c8"
+"checksum protobuf 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "22eaac7d4be49a479dbd875f6f84ab79eef282aa51ba36ce884ec10efd91d355"

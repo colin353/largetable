@@ -7,18 +7,18 @@
 use std::collections::BTreeMap;
 use std::io;
 
+use protobuf::Message;
+
+use generated::dtable::DEntry as DEntry;
+use byteorder::{LittleEndian, ReadBytesExt};
+
 struct MUpdate {
     value: Vec<u8>,
     key: String
 }
 
-struct MEntry {
-    timestamp: i64,
-    value: Vec<u8>
-}
-
 struct MColumn {
-    values: Vec<MEntry>
+    values: Vec<DEntry>
 }
 
 struct MRow {
@@ -27,6 +27,12 @@ struct MRow {
 
 struct MTable {
     rows: BTreeMap<String, MRow>
+}
+
+impl MColumn {
+    fn write_to_writer(&self, w: &mut io::Write) -> Result<u64, io::Error> {
+
+    }
 }
 
 impl MTable {
@@ -43,12 +49,14 @@ impl MTable {
 
     pub fn insert(&mut self, row: String, updates: Vec<MUpdate>) {
         let r = MRow{
-            columns: updates.into_iter().map(|update| (update.key, MColumn{
-                values: vec![MEntry{
-                    timestamp: 100,
-                    value: update.value
-                }]
-            })).collect()
+            columns: updates.into_iter().map(|update| {
+                let mut e = DEntry::new();
+                e.set_timestamp(100);
+                e.set_value(update.value);
+                (update.key, MColumn{
+                    values: vec![e]
+                })
+            }).collect()
         };
         self.rows.insert(row, r);
     }
@@ -57,14 +65,14 @@ impl MTable {
         match self.rows.get(&row) {
             Some(r) => {
                 match r.columns.get(&column) {
-                    Some(c)     => match c.values.len() {
+                    Some(c) => match c.values.len() {
                         0 => None,
                         n => Some(&c.values[n-1].value)
                     },
-                    None        => None
+                    None => None
                 }
             }
-            None    => None
+            None => None
         }
     }
 }
@@ -74,21 +82,22 @@ impl MRow {
         for update in updates {
             match self.columns.get_mut(&update.key) {
                 Some(col) => {
-                    col.values.push(MEntry{
-                        timestamp: 100,
-                        value: update.value
-                    });
+                    let mut e = DEntry::new();
+                    e.set_timestamp(100);
+                    e.set_value(update.value);
+                    col.values.push(e);
                     continue;
                 },
                 None    => ()
             }
 
+            let mut e = DEntry::new();
+            e.set_timestamp(100);
+            e.set_value(update.value);
+
             self.columns.insert(update.key,
                 MColumn{
-                    values: vec![MEntry{
-                        timestamp: 100,
-                        value: update.value
-                    }]
+                    values: vec![e]
                 }
             );
         }
@@ -131,7 +140,5 @@ mod tests {
             let has_disease = m.select(String::from("colin"), String::from("marfans")).unwrap();
             assert_eq!(has_disease[0], 0);
         }
-
-
     }
 }
