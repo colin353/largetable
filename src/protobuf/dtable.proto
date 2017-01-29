@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message DEntry {
+  int64 timestamp = 1;
+  bytes value = 2;
+}
+
+message DColumn {
+  repeated DEntry entries = 1;
+}
+
+message DRow {
+  repeated DColumn columns = 1;
+}
