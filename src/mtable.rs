@@ -31,7 +31,12 @@ struct MTable {
 
 impl MColumn {
     fn write_to_writer(&self, w: &mut io::Write) -> Result<u64, io::Error> {
+        let mut length = 0;
+        for value in &self.values {
+            value.write_to_writer(w)?
+        };
 
+        return Ok(length);
     }
 }
 
