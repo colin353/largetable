@@ -5,11 +5,18 @@
 */
 
 use std::collections::BTreeMap;
+use std::iter::FromIterator;
 use std::io;
 
+use std::fs::File;
+
+use protobuf;
 use protobuf::Message;
+use protobuf::RepeatedField;
 
 use generated::dtable::DEntry as DEntry;
+use generated::dtable::DColumn as DColumn;
+use generated::dtable::DRow as DRow;
 use byteorder::{LittleEndian, ReadBytesExt};
 
 struct MUpdate {
@@ -17,26 +24,25 @@ struct MUpdate {
     key: String
 }
 
-struct MColumn {
-    values: Vec<DEntry>
-}
-
 struct MRow {
-    columns: BTreeMap<String, MColumn>
+    columns: BTreeMap<String, DColumn>
 }
 
 struct MTable {
     rows: BTreeMap<String, MRow>
 }
 
-impl MColumn {
+impl MRow {
     fn write_to_writer(&self, w: &mut io::Write) -> Result<u64, io::Error> {
-        let mut length = 0;
-        for value in &self.values {
-            value.write_to_writer(w)?
-        };
+        // First, construct a DRow using this MRow, then
+        // write out that DRow using write_to_writer.
+        let mut drow = DRow::new();
+        drow.set_columns(protobuf::RepeatedField::from_iter(
+            self.columns.iter().map(|(key, value)| value.clone())
+        ));
+        drow.write_to_writer(w)?;
 
-        return Ok(length);
+        return Ok(0);
     }
 }
 
@@ -52,15 +58,22 @@ impl MTable {
         };
     }
 
+    pub fn get_row(&self, row: String) -> Option<&MRow> {
+        self.rows.get(&row)
+    }
+
     pub fn insert(&mut self, row: String, updates: Vec<MUpdate>) {
         let r = MRow{
             columns: updates.into_iter().map(|update| {
                 let mut e = DEntry::new();
                 e.set_timestamp(100);
                 e.set_value(update.value);
-                (update.key, MColumn{
-                    values: vec![e]
-                })
+
+                let mut c = DColumn::new();
+                c.set_entries(protobuf::RepeatedField::from_vec(vec![e]));
+
+                (update.key, c)
+
             }).collect()
         };
         self.rows.insert(row, r);
@@ -70,9 +83,9 @@ impl MTable {
         match self.rows.get(&row) {
             Some(r) => {
                 match r.columns.get(&column) {
-                    Some(c) => match c.values.len() {
-                        0 => None,
-                        n => Some(&c.values[n-1].value)
+                    Some(c) => match c.get_entries().last() {
+                        Some(e) => Some(&e.value),
+                        None => None
                     },
                     None => None
                 }
@@ -90,7 +103,7 @@ impl MRow {
                     let mut e = DEntry::new();
                     e.set_timestamp(100);
                     e.set_value(update.value);
-                    col.values.push(e);
+                    col.mut_entries().push(e);
                     continue;
                 },
                 None    => ()
@@ -100,17 +113,17 @@ impl MRow {
             e.set_timestamp(100);
             e.set_value(update.value);
 
-            self.columns.insert(update.key,
-                MColumn{
-                    values: vec![e]
-                }
-            );
+            let mut c = DColumn::new();
+            c.set_entries(protobuf::RepeatedField::from_vec(vec![e]));
+
+            self.columns.insert(update.key, c);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std;
     #[test]
     fn can_insert() {
         let mut m = super::MTable::new();
@@ -144,6 +157,16 @@ mod tests {
         {
             let has_disease = m.select(String::from("colin"), String::from("marfans")).unwrap();
             assert_eq!(has_disease[0], 0);
+        }
+
+        let mut f = std::fs::File::create("./data/state.bin").unwrap();
+
+        match m.get_row(String::from("colin")) {
+            Some(r) => {
+                r.write_to_writer(&mut f);
+                ()
+            },
+            None    => panic!("Should be able to get + write row."),
         }
     }
 }
