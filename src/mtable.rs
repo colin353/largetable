@@ -40,6 +40,14 @@ impl MRow {
         drow.set_columns(protobuf::RepeatedField::from_iter(
             self.columns.iter().map(|(key, value)| value.clone())
         ));
+
+        // Next, construct the DRow lookup table. One DRow is intended
+        // to be read into memory in a single read, then binary search
+        // is used to find the columns to probe using the lookup table.
+        drow.set_keys(protobuf::RepeatedField::from_iter(
+            self.columns.iter().map(|(key, value)| key.clone())
+        ));
+
         drow.write_to_writer(w)?;
 
         return Ok(0);
@@ -124,6 +132,9 @@ impl MRow {
 #[cfg(test)]
 mod tests {
     use std;
+    use protobuf;
+    use generated::dtable::DRow as DRow;
+
     #[test]
     fn can_insert() {
         let mut m = super::MTable::new();
@@ -168,5 +179,10 @@ mod tests {
             },
             None    => panic!("Should be able to get + write row."),
         }
+
+        let mut g = std::fs::File::open("./data/state.bin").unwrap();
+
+        let row = protobuf::parse_from_reader::<DRow>(&mut g).unwrap();
+        assert_eq!(["friends", "marfans"], row.get_keys());
     }
 }

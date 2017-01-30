@@ -11,4 +11,5 @@ message DColumn {
 
 message DRow {
   repeated DColumn columns = 1;
+  repeated string keys = 2;
 }
