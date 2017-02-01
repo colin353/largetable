@@ -4,20 +4,16 @@
     The MTable is basically a mutable DTable in memory.
 */
 
+use std::io;
+use std::fmt;
+use std::str::FromStr;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
-use std::io;
-use std::str::FromStr;
-use std::fmt;
 
 use protobuf;
 use protobuf::Message;
 
-use generated::dtable::DEntry as DEntry;
-use generated::dtable::DColumn as DColumn;
-use generated::dtable::DRow as DRow;
-use generated::dtable::DTableHeaderEntry as DTableHeaderEntry;
-use generated::dtable::DTableHeader as DTableHeader;
+use generated::dtable::*;
 
 struct MUpdate<'a> {
     value: Vec<u8>,
@@ -317,7 +313,7 @@ mod tests {
 
         // Make sure that when we search for non-existant columns
         // we don't induce any errors.
-        for (index, word) in y.iter().enumerate() {
+        for word in y {
             println!("at {}", word);
             d.select("row1", word).unwrap_err();
         }

@@ -7,9 +7,7 @@ use std::fmt;
 
 use protobuf;
 
-use generated::dtable::DColumn as DColumn;
-use generated::dtable::DRow as DRow;
-use generated::dtable::DTableHeader as DTableHeader;
+use generated::dtable::*;
 
 pub struct DTable {
     filename: String,
