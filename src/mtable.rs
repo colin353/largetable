@@ -8,18 +8,16 @@ use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::io;
 use std::str::FromStr;
-
-use std::fs::File;
+use std::fmt;
 
 use protobuf;
 use protobuf::Message;
-use protobuf::RepeatedField;
 
 use generated::dtable::DEntry as DEntry;
 use generated::dtable::DColumn as DColumn;
 use generated::dtable::DRow as DRow;
-use dtable;
-use byteorder::{LittleEndian, ReadBytesExt};
+use generated::dtable::DTableHeaderEntry as DTableHeaderEntry;
+use generated::dtable::DTableHeader as DTableHeader;
 
 struct MUpdate<'a> {
     value: Vec<u8>,
@@ -40,19 +38,33 @@ impl <'a> MRow<'a> {
         // write out that DRow using write_to_writer.
         let mut drow = DRow::new();
         drow.set_columns(protobuf::RepeatedField::from_iter(
-            self.columns.iter().map(|(key, value)| value.clone())
+            self.columns.iter().map(|(_, value)| value.clone())
         ));
 
         // Next, construct the DRow lookup table. One DRow is intended
         // to be read into memory in a single read, then binary search
         // is used to find the columns to probe using the lookup table.
         drow.set_keys(protobuf::RepeatedField::from_iter(
-            self.columns.iter().map(|(key, value)| String::from_str(key).unwrap())
+            self.columns.iter().map(|(key, _)| String::from_str(key).unwrap())
         ));
 
         drow.write_to_writer(w)?;
 
         return Ok(drow.get_cached_size() as u64);
+    }
+}
+
+impl <'a> fmt::Display for MRow<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "MRow: {{ {} }}",
+                self.columns
+                .iter()
+                .map(|(k, v)| format!("{}: {:?}", k, v.get_value().unwrap()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -103,6 +115,26 @@ impl <'a> MTable<'a> {
             None => None
         }
     }
+
+    pub fn write_to_writer(&self, data: &mut io::Write, header: &mut io::Write) -> Result<u64, io::Error> {
+        let mut headers = vec![];
+        let mut offset = 0;
+        for (key, row) in &self.rows {
+            let length = row.write_to_writer(data)?;
+            let mut h = DTableHeaderEntry::new();
+            h.set_offset(offset);
+            h.set_key(String::from_str(key).unwrap());
+            headers.push(h);
+            offset += length;
+        }
+
+        let mut table_header = DTableHeader::new();
+        table_header.set_entries(protobuf::RepeatedField::from_vec(headers));
+
+        table_header.write_to_writer(header)?;
+
+        return Ok(offset);
+    }
 }
 
 impl <'a> MRow<'a> {
@@ -134,10 +166,9 @@ impl <'a> MRow<'a> {
 #[cfg(test)]
 mod tests {
     use std;
-    use std::io::Read;
     use protobuf;
-    use protobuf::Message;
     use generated::dtable::DRow as DRow;
+    use dtable;
 
     #[test]
     fn can_insert_and_retrieve() {
@@ -193,7 +224,7 @@ mod tests {
 
         match m.get_row("colin") {
             Some(r) => {
-                let length = r.write_to_writer(&mut f).unwrap();
+                r.write_to_writer(&mut f).unwrap();
                 ()
             },
             None    => panic!("Should be able to get + write row."),
@@ -209,7 +240,59 @@ mod tests {
         row.get_value("friends").unwrap();
         row.get_value("jesus").unwrap();
         row.get_value("christmas").unwrap();
-        assert_eq!(row.get_value("clapton"), None);
+        row.get_value("clapton").unwrap_err();
         assert_eq!(row.get_value("jesus").unwrap(), &[66]);
+    }
+
+    #[test]
+    fn can_convert_mtable_to_dtable() {
+        let mut m = super::MTable::new();
+        m.insert("colin", vec![super::MUpdate{
+            key: "marfans",
+            value: vec![1]
+        }]);
+
+        m.insert("rebecca", vec![super::MUpdate{
+            key: "marfans",
+            value: vec![0]
+        }]);
+
+        m.update("rebecca", vec![super::MUpdate{
+            key: "height",
+            value: vec![3]
+        }]).unwrap();
+
+        m.update("colin", vec![super::MUpdate{
+            key: "height",
+            value: vec![5]
+        }]).unwrap();
+
+        assert_eq!(
+            m.select("colin", "marfans").unwrap(),
+            &[1]
+        );
+
+        println!("{}", m.get_row("colin").unwrap());
+
+        // Now write the MTable to a file.
+        let mut data = std::fs::File::create("./data/test.dtable").unwrap();
+        let mut head = std::fs::File::create("./data/data.dheader").unwrap();
+
+        m.write_to_writer(&mut data, &mut head).unwrap();
+
+        // Now construct a DTable from the MTable and query it.
+        let header = std::fs::File::open("./data/data.dheader").unwrap();
+        let mut d = dtable::DTable::new(
+            String::from("./data/test.dtable"),
+            header
+        ).unwrap();
+
+        println!("{}", d.get_row("colin").unwrap());
+
+        assert_eq!(
+            d.select("colin", "marfans").unwrap(),
+            &[1]
+        );
+
     }
 }

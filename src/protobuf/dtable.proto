@@ -13,3 +13,12 @@ message DRow {
   repeated DColumn columns = 1;
   repeated string keys = 2;
 }
+
+message DTableHeaderEntry {
+  string key = 1;
+  uint64 offset = 2;
+}
+
+message DTableHeader {
+  repeated DTableHeaderEntry entries = 1;
+}
