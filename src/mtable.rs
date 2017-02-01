@@ -1,7 +1,7 @@
 /*
-    memtable.rs
+    mtable.rs
 
-    The memtable is basically an SSTable in memory.
+    The MTable is basically a mutable DTable in memory.
 */
 
 use std::collections::BTreeMap;
@@ -22,6 +22,15 @@ use generated::dtable::DTableHeader as DTableHeader;
 struct MUpdate<'a> {
     value: Vec<u8>,
     key: &'a str
+}
+
+impl <'a> MUpdate<'a> {
+    fn new(key: &str, value: Vec<u8>) -> MUpdate {
+        MUpdate{
+            key: key,
+            value: value
+        }
+    }
 }
 
 struct MRow<'a> {
@@ -171,113 +180,123 @@ mod tests {
     use dtable;
 
     #[test]
-    fn can_insert_and_retrieve() {
+    fn can_print_mrow() {
+        let mut m = super::MTable::new();
+        m.insert("rowname", vec![
+            super::MUpdate{key: "attr1", value: vec![1,2,3]},
+            super::MUpdate{key: "attr2", value: vec![4,5,6]}
+        ]);
+        assert_eq!(
+            format!("{}", m.get_row("rowname").unwrap()),
+            "MRow: { attr1: [1, 2, 3], attr2: [4, 5, 6] }"
+        )
+    }
+
+    #[test]
+    fn can_insert_update_and_select() {
         let mut m = super::MTable::new();
 
         m.insert("colin", vec![super::MUpdate{
             key: "marfans",
             value: vec![1]
         }]);
+
+        m.update("colin", vec![super::MUpdate{
+            key: "marfans",
+            value: vec![5]
+        }]).unwrap();
 
         m.update("colin", vec![super::MUpdate{
             key: "friends",
             value: vec![12,23]
         }]).unwrap();
 
-        // Limited scope, so we free the borrowed terms.
-        {
-            let has_disease = m.select("colin", "marfans").unwrap();
-            assert_eq!(has_disease[0], 1);
-        }
+        assert_eq!(m.select("colin", "marfans").unwrap(), &[5]);
+        assert_eq!(m.select("colin", "friends").unwrap(), &[12,23]);
+        assert!(m.select("colin", "marfonzo").is_none());
+    }
 
-        match m.select("colin", "marfonzo") {
-            Some(_) => panic!("Shouldn't have disease"),
-            None    => ()
-        }
+    #[test]
+    fn can_read_and_write_mrow() {
+        let mut m = super::MTable::new();
 
-        m.update("colin", vec![super::MUpdate{
-            key: "marfans",
-            value: vec![0]
-        }]).unwrap();
+        // This is just a list of random words to insert as columns
+        // into the table.
+        let w = vec![
+            "seed", "load", "performance", "premium", "heap", "momentous",
+            "harmony", "bell", "true", "imperfect", "towering", "icy", "belong"
+        ];
+        // Insert an empty row.
+        m.insert("colin", vec![]);
 
-        m.update("colin", vec![super::MUpdate{
-            key: "christmas",
-            value: vec![44]
-        }]).unwrap();
+        // Write all of the columns to the table.
+        m.update(
+            "colin",
+            w.iter()
+            .enumerate()
+            .map(|(index, value)| super::MUpdate{
+                key: value,
+                value: vec![index as u8]
+            }).collect::<Vec<_>>()
+        ).unwrap();
 
-        m.update("colin", vec![super::MUpdate{
-            key: "mormons",
-            value: vec![0]
-        }]).unwrap();
-
-        m.update("colin", vec![super::MUpdate{
-            key: "jesus",
-            value: vec![66]
-        }]).unwrap();
-
-        {
-            let has_disease = m.select("colin", "marfans").unwrap();
-            assert_eq!(has_disease[0], 0);
-        }
-
+        // Write the MRow to a file.
         let mut f = std::fs::File::create("./data/state.bin").unwrap();
+        m.get_row("colin").unwrap().write_to_writer(&mut f).unwrap();
 
-        match m.get_row("colin") {
-            Some(r) => {
-                r.write_to_writer(&mut f).unwrap();
-                ()
-            },
-            None    => panic!("Should be able to get + write row."),
+        // Read the MRow back from the file.
+        let mut g = std::fs::File::open("./data/state.bin").unwrap();
+        let row = protobuf::parse_from_reader::<DRow>(&mut g).unwrap();
+
+        // Check that every entry in the list of original words is
+        // correctly inserted into the row.
+        for (index, value) in w.iter().enumerate() {
+            assert_eq!(
+                row.get_value(value).unwrap(),
+                &[index as u8]
+            )
         }
 
-        let mut g = std::fs::File::open("./data/state.bin").unwrap();
-
-        let row = protobuf::parse_from_reader::<DRow>(&mut g).unwrap();
-        assert_eq!(["christmas", "friends", "jesus", "marfans", "mormons"], row.get_keys());
-
-        row.get_value("marfans").unwrap();
-        row.get_value("mormons").unwrap();
-        row.get_value("friends").unwrap();
-        row.get_value("jesus").unwrap();
-        row.get_value("christmas").unwrap();
+        // Check that invalid entries are not present.
         row.get_value("clapton").unwrap_err();
-        assert_eq!(row.get_value("jesus").unwrap(), &[66]);
     }
 
     #[test]
     fn can_convert_mtable_to_dtable() {
         let mut m = super::MTable::new();
-        m.insert("colin", vec![super::MUpdate{
-            key: "marfans",
-            value: vec![1]
-        }]);
 
-        m.insert("rebecca", vec![super::MUpdate{
-            key: "marfans",
-            value: vec![0]
-        }]);
+        // Create a bunch of random strings.
+        let x = vec![
+            "790123889", "5378035978", "7329395933", "7556669891", "8317521945",
+            "5473915008", "0540417761", "3783421087", "5583364306", "6454289889"
+        ];
+        let y = vec![
+            "3855519000", "693463382", "0309758752", "6492176736", "9273285817",
+            "2847849405", "5745075665", "1626955318", "0691323875", "0694793474"
+        ];
 
-        m.update("rebecca", vec![super::MUpdate{
-            key: "height",
-            value: vec![3]
-        }]).unwrap();
-
-        m.update("colin", vec![super::MUpdate{
-            key: "height",
-            value: vec![5]
-        }]).unwrap();
-
-        assert_eq!(
-            m.select("colin", "marfans").unwrap(),
-            &[1]
+        // Insert the strings as columns into two rows in the database.
+        m.insert(
+            "row1",
+            x.iter()
+            .enumerate()
+            .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
+            .collect::<Vec<_>>()
         );
 
-        println!("{}", m.get_row("colin").unwrap());
+        m.insert(
+            "row2",
+            y.iter()
+            .enumerate()
+            .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
+            .collect::<Vec<_>>()
+        );
+
+        println!("{}", m.get_row("row1").unwrap());
 
         // Now write the MTable to a file.
         let mut data = std::fs::File::create("./data/test.dtable").unwrap();
         let mut head = std::fs::File::create("./data/data.dheader").unwrap();
-
         m.write_to_writer(&mut data, &mut head).unwrap();
 
         // Now construct a DTable from the MTable and query it.
@@ -287,12 +306,30 @@ mod tests {
             header
         ).unwrap();
 
-        println!("{}", d.get_row("colin").unwrap());
+        // Check for existence of columns and correct values.
+        for (index, word) in y.iter().enumerate() {
+            println!("at {}", word);
+            assert_eq!(
+                d.select("row2", word).unwrap(),
+                &[index as u8]
+            );
+        }
 
+        // Make sure that when we search for non-existant columns
+        // we don't induce any errors.
+        for (index, word) in y.iter().enumerate() {
+            println!("at {}", word);
+            d.select("row1", word).unwrap_err();
+        }
+
+        // Double-check that the format string looks correct.
         assert_eq!(
-            d.select("colin", "marfans").unwrap(),
-            &[1]
+            format!("{}", d.get_row("row1").unwrap()),
+            "DRow: { 0540417761: [6], 3783421087: [7], 5378035978: [1], 5473915008: [5], 5583364306: [8], 6454289889: [9], 7329395933: [2], 7556669891: [3], 790123889: [0], 8317521945: [4] }"
         );
-
+        assert_eq!(
+            format!("{}", d.get_row("row2").unwrap()),
+            "DRow: { 0309758752: [2], 0691323875: [8], 0694793474: [9], 1626955318: [7], 2847849405: [5], 3855519000: [0], 5745075665: [6], 6492176736: [3], 693463382: [1], 9273285817: [4] }"
+        );
     }
 }

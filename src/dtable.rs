@@ -99,7 +99,7 @@ impl DTable {
             match &entries[index as usize] {
                 e if key == e.get_key() => {
                     let length = match index + 1 {
-                        i if i as usize == entries.len() - 1 =>
+                        i if i as usize == entries.len() =>
                             None,
                         i => Some(entries[i as usize].get_offset())
                     };
