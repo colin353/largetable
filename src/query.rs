@@ -6,8 +6,9 @@
 */
 
 use std::fmt;
-
 use std::collections::BTreeMap as Map;
+
+use serde_json;
 
 use mtable;
 
@@ -17,83 +18,68 @@ pub enum QError {
     NotAllowed,
 }
 
-struct QueryJSON {
-    key: String,
-    select: Vec<String>,
-    update: Map<String, String>,
-    insert: Map<String, String>
-}
-
 #[derive(Serialize, Deserialize, Debug)]
-enum QueryAction {
-    Select { columns: Vec<String> },
-    Update { updates: Vec<mtable::MUpdate> },
-    Insert { updates: Vec<mtable::MUpdate> },
-}
-
-impl QueryAction {
-    fn SelectFromColumns(columns: &[&str]) -> QueryAction {
-        QueryAction::Select{ columns: columns.iter().map(|s| s.to_string()).collect() }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Query {
-    key: String,
-    action: QueryAction
+enum Query {
+    #[serde(rename = "select")]
+    Select { row: String, get: Vec<String> },
+    #[serde(rename = "update")]
+    Update { row: String, set: Map<String, Vec<u8>> },
+    #[serde(rename = "insert")]
+    Insert { row: String, set: Map<String, Vec<u8>> },
 }
 
 impl Query {
-    pub fn new(key: &str, action: QueryAction) -> Query {
-        Query{
-            key: key.to_string(),
-            action: action
+    pub fn new_select(row: &str, get: &[&str]) -> Query {
+        Query::Select{
+            row: row.to_string(),
+            get: get.iter().map(|s| s.to_string()).collect()
+        }
+    }
+
+    pub fn new_update(row: &str, set: Vec<mtable::MUpdate>) -> Query {
+        Query::Update{
+            row: row.to_string(),
+            set: set.into_iter().map(|u| (u.key, u.value)).collect()
+        }
+    }
+
+    pub fn new_insert(row: &str, set: Vec<mtable::MUpdate>) -> Query {
+        Query::Insert{
+            row: row.to_string(),
+            set: set.into_iter().map(|u| (u.key, u.value)).collect()
         }
     }
 
     // This function parses an arbitrary string and returns
     // a query or an error.
     pub fn parse(input: &str) -> Result<Query, QError> {
-        Ok(Query{
-            key: String::from("row"),
-            action: QueryAction::Select{ columns: vec![String::from("test")] }
-        })
+        serde_json::from_str(input).map_err(|e| QError::ParseError)
+    }
+
+    // Return the query as a JSON object.
+    pub fn as_json(&self) -> Result<String, QError> {
+        serde_json::to_string(&self).map_err(|_| QError::ParseError)
     }
 }
 
 impl fmt::Display for Query {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-
-        fn express_updates(ups: &[mtable::MUpdate]) -> String {
-            ups.iter()
-               .map(|m| format!("{} = {:?}", m.key, m.value))
-               .collect::<Vec<_>>()
-               .join(", ")
+        match self.as_json() {
+            Ok(s)   => write!(f, "{}", s),
+            Err(_)  => write!(f, "<Unable to parse query>")
         }
-
-        let action = match self.action {
-            QueryAction::Select{columns: ref cols } =>
-                format!("SELECT {}", cols.join(", ")),
-            QueryAction::Update{updates: ref ups } =>
-                format!("UPDATE {}", express_updates(ups)),
-            QueryAction::Insert{updates: ref ups } =>
-                format!("INSERT {}", express_updates(ups))
-        };
-
-        write!(f, "{} WHERE KEY = {}", action, self.key)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std;
     use mtable;
 
     #[test]
     fn can_print_select() {
-        let mut q = super::Query::new(
+        let q = super::Query::new_select(
             "row1",
-            super::QueryAction::SelectFromColumns(&["test", "column2", "col3"])
+            &["test", "column2", "col3"]
         );
 
         assert_eq!(
@@ -104,16 +90,20 @@ mod tests {
 
     #[test]
     fn can_print_update() {
-        let mut q = super::Query::new("row1",
-            super::QueryAction::Update{
-                updates: vec![mtable::MUpdate::new("test", vec![1, 2])]
-            }
+        let q = super::Query::new_update(
+            "row1",
+            vec![mtable::MUpdate::new("test", vec![1, 2])]
         );
 
         assert_eq!(
             format!("{}", q),
             "UPDATE test = [1, 2] WHERE KEY = row1"
         );
+
+        assert_eq!(
+            q.as_json().unwrap(),
+            "{action: {select}}"
+        )
     }
 
     #[test]
