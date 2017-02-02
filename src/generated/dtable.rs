@@ -140,7 +140,7 @@ impl ::protobuf::Message for DEntry {
         if self.timestamp != 0 {
             my_size += ::protobuf::rt::value_size(1, self.timestamp, ::protobuf::wire_format::WireTypeVarint);
         };
-        if self.value != ::std::vec::Vec::new() {
+        if self.value != ::std::vec::Vec::<u8>::new() {
             my_size += ::protobuf::rt::bytes_size(2, &self.value);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -152,7 +152,7 @@ impl ::protobuf::Message for DEntry {
         if self.timestamp != 0 {
             os.write_int64(1, self.timestamp)?;
         };
-        if self.value != ::std::vec::Vec::new() {
+        if self.value != ::std::vec::Vec::<u8>::new() {
             os.write_bytes(2, &self.value)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;

@@ -4,5 +4,7 @@ version = "0.1.0"
 authors = ["Colin Merkel <colin.merkel@gmail.com>"]
 
 [dependencies]
-byteorder = "1.0.0"
-protobuf = "1.2.1"
+protobuf = { git = "https://github.com/stepancheg/rust-protobuf" }
+serde = "0.9"
+serde_json = "0.9"
+serde_derive = "0.9"

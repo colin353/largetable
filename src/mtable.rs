@@ -15,29 +15,30 @@ use protobuf::Message;
 
 use generated::dtable::*;
 
-struct MUpdate<'a> {
-    value: Vec<u8>,
-    key: &'a str
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MUpdate {
+    pub value: Vec<u8>,
+    pub key: String
 }
 
-impl <'a> MUpdate<'a> {
-    fn new(key: &str, value: Vec<u8>) -> MUpdate {
+impl MUpdate {
+    pub fn new(key: &str, value: Vec<u8>) -> MUpdate {
         MUpdate{
-            key: key,
+            key: key.to_string(),
             value: value
         }
     }
 }
 
-struct MRow<'a> {
-    columns: BTreeMap<&'a str, DColumn>
+struct MRow {
+    columns: BTreeMap<String, DColumn>
 }
 
-struct MTable<'a> {
-    rows: BTreeMap<&'a str, MRow<'a>>
+struct MTable {
+    rows: BTreeMap<String, MRow>
 }
 
-impl <'a> MRow<'a> {
+impl MRow {
     fn write_to_writer(&self, w: &mut io::Write) -> Result<u64, io::Error> {
         // First, construct a DRow using this MRow, then
         // write out that DRow using write_to_writer.
@@ -59,7 +60,7 @@ impl <'a> MRow<'a> {
     }
 }
 
-impl <'a> fmt::Display for MRow<'a> {
+impl fmt::Display for MRow {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -73,23 +74,23 @@ impl <'a> fmt::Display for MRow<'a> {
     }
 }
 
-impl <'a> MTable<'a> {
-    fn new() -> MTable<'a> {
+impl MTable {
+    fn new() -> MTable {
         return MTable{rows: BTreeMap::new()};
     }
 
-    pub fn update(&mut self, row: &'a str, updates: Vec<MUpdate<'a>>) -> Result<(), io::Error>{
-        return match self.rows.get_mut(&row) {
+    pub fn update(&mut self, row: &str, updates: Vec<MUpdate>) -> Result<(), io::Error>{
+        return match self.rows.get_mut(row) {
             None    => Err(io::Error::new(io::ErrorKind::NotFound, "No such row.")),
             Some(r) => Ok(r.update(updates))
         };
     }
 
-    pub fn get_row(&self, row: &'a str) -> Option<&MRow> {
-        self.rows.get(&row)
+    pub fn get_row(&self, row: &str) -> Option<&MRow> {
+        self.rows.get(row)
     }
 
-    pub fn insert(&mut self, row: &'a str, updates: Vec<MUpdate<'a>>) {
+    pub fn insert(&mut self, row: &str, updates: Vec<MUpdate>) {
         let r = MRow{
             columns: updates.into_iter().map(|update| {
                 let mut e = DEntry::new();
@@ -99,17 +100,17 @@ impl <'a> MTable<'a> {
                 let mut c = DColumn::new();
                 c.set_entries(protobuf::RepeatedField::from_vec(vec![e]));
 
-                (update.key, c)
+                (update.key.to_string(), c)
 
             }).collect()
         };
-        self.rows.insert(row, r);
+        self.rows.insert(row.to_string(), r);
     }
 
-    pub fn select(&'a self, row: &'a str, column: &'a str) -> Option<&[u8]> {
-        match self.rows.get(&row) {
+    pub fn select(&self, row: &str, column: &str) -> Option<&[u8]> {
+        match self.rows.get(row) {
             Some(r) => {
-                match r.columns.get(&column) {
+                match r.columns.get(column) {
                     Some(c) => match c.get_entries().last() {
                         Some(e) => Some(&e.value),
                         None => None
@@ -142,10 +143,10 @@ impl <'a> MTable<'a> {
     }
 }
 
-impl <'a> MRow<'a> {
-    fn update(&mut self, updates: Vec<MUpdate<'a>>) {
+impl MRow {
+    fn update(&mut self, updates: Vec<MUpdate>) {
         for update in updates {
-            match self.columns.get_mut(&update.key) {
+            match self.columns.get_mut(&*update.key) {
                 Some(col) => {
                     let mut e = DEntry::new();
                     e.set_timestamp(100);
@@ -179,8 +180,8 @@ mod tests {
     fn can_print_mrow() {
         let mut m = super::MTable::new();
         m.insert("rowname", vec![
-            super::MUpdate{key: "attr1", value: vec![1,2,3]},
-            super::MUpdate{key: "attr2", value: vec![4,5,6]}
+            super::MUpdate::new("attr1", vec![1,2,3]),
+            super::MUpdate::new("attr2", vec![4,5,6])
         ]);
         assert_eq!(
             format!("{}", m.get_row("rowname").unwrap()),
@@ -192,20 +193,20 @@ mod tests {
     fn can_insert_update_and_select() {
         let mut m = super::MTable::new();
 
-        m.insert("colin", vec![super::MUpdate{
-            key: "marfans",
-            value: vec![1]
-        }]);
+        m.insert("colin", vec![super::MUpdate::new(
+            "marfans",
+            vec![1]
+        )]);
 
-        m.update("colin", vec![super::MUpdate{
-            key: "marfans",
-            value: vec![5]
-        }]).unwrap();
+        m.update("colin", vec![super::MUpdate::new(
+            "marfans",
+            vec![5]
+        )]).unwrap();
 
-        m.update("colin", vec![super::MUpdate{
-            key: "friends",
-            value: vec![12,23]
-        }]).unwrap();
+        m.update("colin", vec![super::MUpdate::new(
+            "friends",
+            vec![12,23]
+        )]).unwrap();
 
         assert_eq!(m.select("colin", "marfans").unwrap(), &[5]);
         assert_eq!(m.select("colin", "friends").unwrap(), &[12,23]);
@@ -230,10 +231,9 @@ mod tests {
             "colin",
             w.iter()
             .enumerate()
-            .map(|(index, value)| super::MUpdate{
-                key: value,
-                value: vec![index as u8]
-            }).collect::<Vec<_>>()
+            .map(|(index, value)| super::MUpdate::new(
+                value, vec![index as u8]
+            )).collect::<Vec<_>>()
         ).unwrap();
 
         // Write the MRow to a file.
