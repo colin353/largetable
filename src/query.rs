@@ -14,18 +14,17 @@ use mtable;
 
 #[derive(Debug)]
 pub enum QError {
-    ParseError,
-    NotAllowed,
+    ParseError
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-enum Query {
+pub enum Query {
     #[serde(rename = "select")]
     Select { row: String, get: Vec<String> },
     #[serde(rename = "update")]
-    Update { row: String, set: Map<String, Vec<u8>> },
+    Update { row: String, set: Map<String, String> },
     #[serde(rename = "insert")]
-    Insert { row: String, set: Map<String, Vec<u8>> },
+    Insert { row: String, set: Map<String, String> },
 }
 
 impl Query {
@@ -39,21 +38,21 @@ impl Query {
     pub fn new_update(row: &str, set: Vec<mtable::MUpdate>) -> Query {
         Query::Update{
             row: row.to_string(),
-            set: set.into_iter().map(|u| (u.key, u.value)).collect()
+            set: set.into_iter().map(|u| (u.key, String::from_utf8(u.value).unwrap())).collect()
         }
     }
 
     pub fn new_insert(row: &str, set: Vec<mtable::MUpdate>) -> Query {
         Query::Insert{
             row: row.to_string(),
-            set: set.into_iter().map(|u| (u.key, u.value)).collect()
+            set: set.into_iter().map(|u| (u.key, String::from_utf8(u.value).unwrap())).collect()
         }
     }
 
     // This function parses an arbitrary string and returns
     // a query or an error.
     pub fn parse(input: &str) -> Result<Query, QError> {
-        serde_json::from_str(input).map_err(|e| QError::ParseError)
+        serde_json::from_str(input).map_err(|_| QError::ParseError)
     }
 
     // Return the query as a JSON object.
@@ -84,7 +83,7 @@ mod tests {
 
         assert_eq!(
             format!("{}", q),
-            "SELECT test, column2, col3 WHERE KEY = row1"
+            r#"{"select":{"row":"row1","get":["test","column2","col3"]}}"#
         )
     }
 
@@ -92,22 +91,32 @@ mod tests {
     fn can_print_update() {
         let q = super::Query::new_update(
             "row1",
-            vec![mtable::MUpdate::new("test", vec![1, 2])]
+            vec![mtable::MUpdate::new("test", vec![120, 121])]
         );
 
         assert_eq!(
             format!("{}", q),
-            "UPDATE test = [1, 2] WHERE KEY = row1"
+            r#"{"update":{"row":"row1","set":{"test":"xy"}}}"#
         );
-
-        assert_eq!(
-            q.as_json().unwrap(),
-            "{action: {select}}"
-        )
     }
 
     #[test]
-    fn can_parse_query() {
-        super::Query::parse("select: {test, west} where key = fest").unwrap();
+    fn can_print_insert() {
+        let q = super::Query::new_insert(
+            "row1",
+            vec![mtable::MUpdate::new("test", vec![120, 121])]
+        );
+
+        assert_eq!(
+            format!("{}", q),
+            r#"{"insert":{"row":"row1","set":{"test":"xy"}}}"#
+        );
+    }
+
+    #[test]
+    fn can_parse_queries() {
+        super::Query::parse(r#"{"select": { "row": "row1", "get": [ "col5" ] }}"#).unwrap();
+        super::Query::parse(r#"{"update": { "row": "row1", "set": { "col5": "value" } }}"#).unwrap();
+        super::Query::parse(r#"{"insert": { "row": "row1", "set": { "col5": "value" } }}"#).unwrap();
     }
 }

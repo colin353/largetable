@@ -8,3 +8,14 @@ protobuf = { git = "https://github.com/stepancheg/rust-protobuf" }
 serde = "0.9"
 serde_json = "0.9"
 serde_derive = "0.9"
+
+[dependencies.nickel]
+version = "*"
+
+[[bin]]
+name = "largetable"
+path = "src/main.rs"
+
+[[bin]]
+name = "largetable-cli"
+path = "src/cli.rs"
