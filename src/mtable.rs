@@ -304,18 +304,16 @@ mod tests {
 
         // Check for existence of columns and correct values.
         for (index, word) in y.iter().enumerate() {
-            println!("at {}", word);
             assert_eq!(
-                d.select("row2", word).unwrap(),
+                d.select("row2", &[word]).unwrap()[0],
                 &[index as u8]
             );
         }
 
         // Make sure that when we search for non-existant columns
-        // we don't induce any errors.
+        // we don't get any problems.
         for word in y {
-            println!("at {}", word);
-            d.select("row1", word).unwrap_err();
+            assert_eq!(d.select("row1", &[word]).unwrap()[0].len(), 0);
         }
 
         // Double-check that the format string looks correct.
