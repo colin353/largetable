@@ -30,11 +30,11 @@ impl MUpdate {
     }
 }
 
-struct MRow {
+pub struct MRow {
     columns: BTreeMap<String, DColumn>
 }
 
-struct MTable {
+pub struct MTable {
     rows: BTreeMap<String, MRow>
 }
 
@@ -75,7 +75,7 @@ impl fmt::Display for MRow {
 }
 
 impl MTable {
-    fn new() -> MTable {
+    pub fn new() -> MTable {
         return MTable{rows: BTreeMap::new()};
     }
 
@@ -291,12 +291,12 @@ mod tests {
         println!("{}", m.get_row("row1").unwrap());
 
         // Now write the MTable to a file.
-        let mut data = std::fs::File::create("./data/test.dtable").unwrap();
-        let mut head = std::fs::File::create("./data/data.dheader").unwrap();
+        let mut data = std::fs::File::create("./data/test.dtable.header").unwrap();
+        let mut head = std::fs::File::create("./data/test.dtable").unwrap();
         m.write_to_writer(&mut data, &mut head).unwrap();
 
         // Now construct a DTable from the MTable and query it.
-        let header = std::fs::File::open("./data/data.dheader").unwrap();
+        let header = std::fs::File::open("./data/test.dtable.header").unwrap();
         let mut d = dtable::DTable::new(
             String::from("./data/test.dtable"),
             header

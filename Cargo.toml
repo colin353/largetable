@@ -8,6 +8,8 @@ protobuf = { git = "https://github.com/stepancheg/rust-protobuf" }
 serde = "0.9"
 serde_json = "0.9"
 serde_derive = "0.9"
+linefeed = "0.2.2"
+glob = "0.2"
 
 [dependencies.nickel]
 version = "*"
