@@ -83,34 +83,33 @@ impl Base {
 
     pub fn select(&self, row: &str, cols: &[&str]) -> query::QueryResult {
         // First, try to query the mtable.
-        let mut result = self.memtable.select(row, cols);
+        let mresult = vec![self.memtable.select(row, cols)];
 
         // Now, merge the results with those in the dtables.
-        for d in &self.disktables {
-            let mut merge = d.select(row, cols);
-            match result {
-                Some(ref r) => {
-                    match merge {
-                        // Both dtable and mtable have values, so we
-                        // must merge them together.
-                        Some(m) => {
+        let dresults = self.disktables
+            .iter()
+            .map((|d| d.select(row, cols)));
 
-                        },
-                        // The dtable has nothing to contribute, skip.
-                        None => continue
+        // Eliminate any misses, and collect up rows to merge.
+        let results = mresult
+            .iter()
+            .chain(dresults)
+            .filter(|x| x.is_some())
+            .collect::<Vec<_>>();
+
+        match results.len() {
+            0 => query::QueryResult::RowNotFound,
+            _ => query::QueryResult::Data{columns: cols.iter()
+                .enumerate()
+                .map(|i, col| {
+                    for row in results {
+                        if row[i].is_some() {
+                            return row[i];
+                        }
                     }
-                },
-                // The memtable didn't have anything, so we'll use
-                // this dtable value as the result.
-                None    => {
-                    mem::replace(&mut result, merge);
-                }
+                    return None
+                }).collect::<Vec<_>>()
             }
-        }
-
-        match result {
-            Some(result) => query::QueryResult::Data{columns: result},
-            None         => query::QueryResult::RowNotFound
         }
     }
 }

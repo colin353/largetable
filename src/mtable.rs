@@ -21,6 +21,8 @@ pub struct MUpdate {
     pub key: String
 }
 
+pub type TOption = Option<Vec<Option<Vec<u8>>>>;
+
 impl MUpdate {
     pub fn new(key: &str, value: Vec<u8>) -> MUpdate {
         MUpdate{
@@ -117,7 +119,7 @@ impl MTable {
         }
     }
 
-    pub fn select(&self, row: &str, cols: &[&str]) -> Option<Vec<Option<Vec<u8>>>> {
+    pub fn select(&self, row: &str, cols: &[&str]) -> TOption {
         let r = match self.rows.get(row) {
             Some(r) => r,
             None    => return None

@@ -7,6 +7,7 @@ use std::fmt;
 
 use protobuf;
 
+use mtable;
 use generated::dtable::*;
 
 pub struct DTable {
@@ -127,7 +128,7 @@ impl DTable {
         }
     }
 
-    pub fn select(&self, row: &str, cols: &[&str]) -> Option<Vec<Option<Vec<u8>>>> {
+    pub fn select(&self, row: &str, cols: &[&str]) -> mtable::TOption {
         let row = match self.get_row(row) {
             Ok(r)   => r,
             Err(_)  => return None
