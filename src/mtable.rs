@@ -107,19 +107,28 @@ impl MTable {
         self.rows.insert(row.to_string(), r);
     }
 
-    pub fn select(&self, row: &str, column: &str) -> Option<&[u8]> {
-        match self.rows.get(row) {
-            Some(r) => {
-                match r.columns.get(column) {
-                    Some(c) => match c.get_entries().last() {
-                        Some(e) => Some(&e.value),
-                        None => None
-                    },
-                    None => None
-                }
-            }
+    pub fn select_one(&self, row: &str, col: &str) -> Option<Vec<u8>> {
+        match self.select(row, &[col]) {
+            Some(ref result) => match result[0] {
+                Some(ref value) => Some(value.clone()),
+                None        => None
+            },
             None => None
         }
+    }
+
+    pub fn select(&self, row: &str, cols: &[&str]) -> Option<Vec<Option<Vec<u8>>>> {
+        let r = match self.rows.get(row) {
+            Some(r) => r,
+            None    => return None
+        };
+
+        Some(cols.iter()
+                 .map(|column| match r.columns.get(column.clone()) {
+                    Some(c) => c.get_value().ok(),
+                    None => None
+            }).collect::<Vec<_>>()
+        )
     }
 
     pub fn write_to_writer(&self, data: &mut io::Write, header: &mut io::Write) -> Result<u64, io::Error> {
@@ -208,9 +217,9 @@ mod tests {
             vec![12,23]
         )]).unwrap();
 
-        assert_eq!(m.select("colin", "marfans").unwrap(), &[5]);
-        assert_eq!(m.select("colin", "friends").unwrap(), &[12,23]);
-        assert!(m.select("colin", "marfonzo").is_none());
+        assert_eq!(m.select_one("colin", "marfans").unwrap(), &[5]);
+        assert_eq!(m.select_one("colin", "friends").unwrap(), &[12,23]);
+        assert!(m.select_one("colin", "marfonzo").is_none());
     }
 
     #[test]
@@ -291,8 +300,8 @@ mod tests {
         println!("{}", m.get_row("row1").unwrap());
 
         // Now write the MTable to a file.
-        let mut data = std::fs::File::create("./data/test.dtable.header").unwrap();
-        let mut head = std::fs::File::create("./data/test.dtable").unwrap();
+        let mut data = std::fs::File::create("./data/test.dtable").unwrap();
+        let mut head = std::fs::File::create("./data/test.dtable.header").unwrap();
         m.write_to_writer(&mut data, &mut head).unwrap();
 
         // Now construct a DTable from the MTable and query it.
@@ -304,8 +313,9 @@ mod tests {
 
         // Check for existence of columns and correct values.
         for (index, word) in y.iter().enumerate() {
+            println!("Exists: {}?", word);
             assert_eq!(
-                d.select("row2", &[word]).unwrap()[0],
+                d.select_one("row2", word).unwrap(),
                 &[index as u8]
             );
         }
@@ -313,7 +323,7 @@ mod tests {
         // Make sure that when we search for non-existant columns
         // we don't get any problems.
         for word in y {
-            assert_eq!(d.select("row1", &[word]).unwrap()[0].len(), 0);
+            assert!(d.select_one("row1", word).is_none());
         }
 
         // Double-check that the format string looks correct.

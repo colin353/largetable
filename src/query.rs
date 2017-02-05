@@ -27,6 +27,16 @@ pub enum Query {
     Insert { row: String, set: Map<String, String> },
 }
 
+#[derive(Serialize, Debug)]
+pub enum QueryResult {
+    NotImplemented,
+    RowNotFound,
+    RowAlreadyExists,
+    InternalError,
+    Done,
+    Data{ columns: Vec<Option<Vec<u8>>> }
+}
+
 impl Query {
     pub fn new_select(row: &str, get: &[&str]) -> Query {
         Query::Select{
@@ -66,6 +76,30 @@ impl fmt::Display for Query {
         match self.as_json() {
             Ok(s)   => write!(f, "{}", s),
             Err(_)  => write!(f, "<Unable to parse query>")
+        }
+    }
+}
+
+impl fmt::Display for QueryResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            QueryResult::Done             => write!(f, "OK."),
+            QueryResult::RowNotFound      => write!(f, "Row not found."),
+            QueryResult::RowAlreadyExists => write!(f, "Row already exists."),
+            QueryResult::InternalError    => write!(f, "Internal error."),
+            QueryResult::NotImplemented   => write!(f, "Not implemented."),
+            QueryResult::Data{columns: ref c} => {
+                write!(f, "Data: [{}]", c.iter().map(|s| match *s {
+                    Some(ref x) => {
+                        format!(
+                            "\"{}\"",
+                            String::from_utf8(x.clone())
+                            .unwrap_or(String::from("Err"))
+                        )
+                    },
+                    None        => String::from("None")
+                }).collect::<Vec<_>>().join(", "))
+            }
         }
     }
 }

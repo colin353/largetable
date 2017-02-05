@@ -35,8 +35,10 @@ fn main() {
             }
             x => {
                 match query::Query::parse(&x) {
-                    Ok(_)   => println!("valid!"),
-                    Err(_)  => println!("that didn't parse.")
+                    Ok(query)   => {
+                        println!("{}", database.query(query))
+                    }
+                    Err(_)  => println!("That didn't parse.")
                 }
             }
         }

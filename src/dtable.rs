@@ -117,20 +117,31 @@ impl DTable {
         std::fs::File::open(&self.filename)
     }
 
-    pub fn select(&mut self, row: &str, cols: &[&str]) -> Result<Vec<Vec<u8>>, TError> {
+    pub fn select_one(&self, row: &str, col: &str) -> Option<Vec<u8>> {
+        match self.select(row, &[col]) {
+            Some(ref result) => match result[0] {
+                Some(ref value) => Some(value.clone()),
+                None        => None
+            },
+            None => None
+        }
+    }
+
+    pub fn select(&self, row: &str, cols: &[&str]) -> Option<Vec<Option<Vec<u8>>>> {
         let row = match self.get_row(row) {
             Ok(r)   => r,
-            Err(_)  => return Err(TError::NotFound)
+            Err(_)  => return None
         };
-        return Ok(cols.iter().map(|col| {
+
+        return Some(cols.iter().map(|col| {
             match row.get_value(col) {
-                Ok(v)   => v,
-                Err(_)  => vec![]
+                Ok(v)   => Some(v),
+                Err(_)  => None
             }
         }).collect::<Vec<_>>());
     }
 
-    pub fn get_row(&mut self, key: &str) -> Result<DRow, TError> {
+    pub fn get_row(&self, key: &str) -> Result<DRow, TError> {
         let offset = match self.get_row_offset(key) {
             Some(n) => n,
             None    => return Err(TError::NotFound)
