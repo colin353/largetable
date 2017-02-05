@@ -4,6 +4,7 @@ extern crate serde_json;
 extern crate protobuf;
 extern crate linefeed;
 extern crate glob;
+extern crate regex;
 
 mod query;
 mod mtable;
@@ -32,6 +33,12 @@ fn main() {
             x if x == "exit" => {
                 println!("bye!");
                 break;
+            }
+            x if x == "flush" => {
+                match database.empty_memtable() {
+                    Ok(_)   => println!("{}", query::QueryResult::Done),
+                    Err(_)  => println!("{}", query::QueryResult::InternalError)
+                }
             }
             x => {
                 match query::Query::parse(&x) {

@@ -8,6 +8,8 @@
 
 use std;
 use std::iter;
+use std::mem;
+use regex;
 
 use mtable;
 use dtable;
@@ -20,6 +22,8 @@ pub enum BaseError {
 }
 
 pub struct Base {
+    directory: String,
+    disktable_index: u32,
     memtable: mtable::MTable,
     disktables: Vec<dtable::DTable>
 }
@@ -27,6 +31,8 @@ pub struct Base {
 impl Base {
     pub fn new() -> Base {
         Base{
+            directory: String::new(),
+            disktable_index: 0,
             memtable: mtable::MTable::new(),
             disktables: vec![]
         }
@@ -35,11 +41,23 @@ impl Base {
     // Load up all of the DTables located in the directory.
     pub fn load(&mut self, directory: &str) -> Result<(), BaseError> {
         let entries = glob(&format!("{}/*.dtable", directory)).map_err(|_| BaseError::CorruptedFiles)?;
+
+        self.directory = directory.to_owned();
+        let file_scanner = regex::Regex::new(r"/([0-9]+)\.dtable$").unwrap();
         for entry in entries {
-            // We need two files to read a dtable. One is the dtable filename, and
-            // the second is the header, which must be read into memory.
             let data_path = entry.map_err(|_| BaseError::CorruptedFiles)?;
             let data = data_path.to_str().ok_or(BaseError::CorruptedFiles)?;
+
+            // First, let's check for a number in the filename. That'll let us know
+            // what index future dtables should be at.
+            let mat = file_scanner.captures(&data).ok_or(BaseError::CorruptedFiles)?;
+            let index = mat.get(1).unwrap().as_str().parse::<u32>().map_err(|_| BaseError::CorruptedFiles)?;
+            if index > self.disktable_index {
+                self.disktable_index = index;
+            }
+
+            // We need two files to read a dtable. One is the dtable filename, and
+            // the second is the header, which must be read into memory.
             let mut header: String = data.to_owned();
             header.push_str(".header");
             let header_file = std::fs::File::open(&header).map_err(|_| BaseError::CorruptedFiles)?;
@@ -50,6 +68,41 @@ impl Base {
             println!("Loaded dtable: {}", data);
         }
 
+        Ok(())
+    }
+
+    // This function takes the current state of the memtable and empties it
+    // into a DTable, finally replacing the memtable with a new, blank one.
+    pub fn empty_memtable(&mut self) -> Result<(), BaseError> {
+        self.disktable_index += 1;
+
+        // This block clarifies scope for the file references.
+        {
+            println!("Creating dtable file.");
+            let mut f = std::fs::File::create(
+                format!("{}/{}.dtable", self.directory, self.disktable_index)
+            ).map_err(|_| BaseError::CorruptedFiles)?;
+
+            println!("Creating dtable header.");
+            let mut h = std::fs::File::create(
+                format!("{}/{}.dtable.header", self.directory, self.disktable_index)
+            ).map_err(|_| BaseError::CorruptedFiles)?;
+
+            println!("Writing memtable to disk.");
+            self.memtable.write_to_writer(&mut f, &mut h).map_err(|_| BaseError::CorruptedFiles)?;
+        }
+
+        println!("Emptying memtable.");
+        mem::replace(&mut self.memtable, mtable::MTable::new());
+
+        println!("Reading fresh dtable.");
+        let h = std::fs::File::open(
+            format!("{}/{}.dtable.header", self.directory, self.disktable_index)
+        ).map_err(|_| BaseError::CorruptedFiles)?;
+
+        self.disktables.push(
+            dtable::DTable::new(format!("{}/{}.dtable.header", self.directory, self.disktable_index), h).map_err(|_| BaseError::CorruptedFiles)?
+        );
         Ok(())
     }
 

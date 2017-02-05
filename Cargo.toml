@@ -10,6 +10,7 @@ serde_json = "0.9"
 serde_derive = "0.9"
 linefeed = "0.2.2"
 glob = "0.2"
+regex = "0.2"
 
 [dependencies.nickel]
 version = "*"

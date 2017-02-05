@@ -83,10 +83,12 @@ impl MTable {
     }
 
     pub fn update(&mut self, row: &str, updates: Vec<MUpdate>) -> Result<(), dtable::TError>{
-        return match self.rows.get_mut(row) {
-            None    => Err(dtable::TError::NotFound),
-            Some(r) => Ok(r.update(updates))
+        match self.rows.get_mut(row) {
+            None    => (),
+            Some(r) => return Ok(r.update(updates))
         };
+
+        self.insert(row, updates)
     }
 
     pub fn get_row(&self, row: &str) -> Option<&MRow> {
@@ -309,14 +311,14 @@ mod tests {
         println!("{}", m.get_row("row1").unwrap());
 
         // Now write the MTable to a file.
-        let mut data = std::fs::File::create("./data/test.dtable").unwrap();
-        let mut head = std::fs::File::create("./data/test.dtable.header").unwrap();
+        let mut data = std::fs::File::create("./data/0.dtable").unwrap();
+        let mut head = std::fs::File::create("./data/0.dtable.header").unwrap();
         m.write_to_writer(&mut data, &mut head).unwrap();
 
         // Now construct a DTable from the MTable and query it.
-        let header = std::fs::File::open("./data/test.dtable.header").unwrap();
+        let header = std::fs::File::open("./data/0.dtable.header").unwrap();
         let d = dtable::DTable::new(
-            String::from("./data/test.dtable"),
+            String::from("./data/0.dtable"),
             header
         ).unwrap();
 

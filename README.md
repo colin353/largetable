@@ -14,6 +14,7 @@ Things I'd like to do pretty soon:
 - [ ] Automatically detecting when MTable is too large
 - [ ] Merging MTables with DTables and saving them back to disk
 - [ ] Merging multiple DTables together into a single table
+- [ ] Actual timestamps used in MUpdates, and use them for serving selects
 
 Medium term ideas:
 
@@ -22,6 +23,8 @@ Medium term ideas:
 - [ ] Compare performance with existing database systems
 - [ ] Flame graphs and checking where bottlenecks are
 - [ ] See how varying the number of workers changes perf
+- [ ] Handle selects with a fixed timestamp
+- [ ] Garbage collect historical data (perhaps when merging DTables?)
 
 Long term things that would be interesting to do:
 
