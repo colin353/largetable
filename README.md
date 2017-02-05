@@ -10,12 +10,14 @@ hoping to work out as they arise.
 
 Things I'd like to do pretty soon:
 
-- [ ] Support for multithreaded operations
-- [ ] Merging MTables with DTables and saving them back to disk
+- [ ] Commit log
 - [ ] Automatically detecting when MTable is too large
+- [ ] Merging MTables with DTables and saving them back to disk
+- [ ] Merging multiple DTables together into a single table
 
 Medium term ideas:
 
+- [ ] Support for multithreaded operations
 - [ ] Performance testing with larger volumes of data
 - [ ] Compare performance with existing database systems
 - [ ] Flame graphs and checking where bottlenecks are
