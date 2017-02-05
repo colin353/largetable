@@ -149,8 +149,10 @@ mod tests {
 
     #[test]
     fn can_parse_queries() {
+        super::Query::parse(r#"{"select": { "row": "test 1 2 3", "get": [] }}"#).unwrap();
         super::Query::parse(r#"{"select": { "row": "row1", "get": [ "col5" ] }}"#).unwrap();
+        super::Query::parse(r#"{"update": { "row": "row1", "set": {} }}"#).unwrap();
         super::Query::parse(r#"{"update": { "row": "row1", "set": { "col5": "value" } }}"#).unwrap();
-        super::Query::parse(r#"{"insert": { "row": "row1", "set": { "col5": "value" } }}"#).unwrap();
+        super::Query::parse(r#"{"insert": { "row": "row1", "set": { "col5": "value", "col7": "value" } }}"#).unwrap();
     }
 }

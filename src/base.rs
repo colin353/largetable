@@ -7,7 +7,7 @@
 */
 
 use std;
-use std::mem;
+use std::iter;
 
 use mtable;
 use dtable;
@@ -42,7 +42,7 @@ impl Base {
             let data = data_path.to_str().ok_or(BaseError::CorruptedFiles)?;
             let mut header: String = data.to_owned();
             header.push_str(".header");
-            let mut header_file = std::fs::File::open(&header).map_err(|_| BaseError::CorruptedFiles)?;
+            let header_file = std::fs::File::open(&header).map_err(|_| BaseError::CorruptedFiles)?;
 
             self.disktables.push(
                 dtable::DTable::new(data.to_owned(), header_file).map_err(|_| BaseError::CorruptedFiles)?
@@ -71,19 +71,43 @@ impl Base {
                         mtable::MUpdate::new(key.as_str(), value.into_bytes())
                     ).collect::<Vec<_>>()
                 )
+            },
+            query::Query::Update{row: r, set: s} => {
+                self.update(
+                    &r,
+                    s.into_iter().map(|(key, value)|
+                        mtable::MUpdate::new(key.as_str(), value.into_bytes())
+                    ).collect::<Vec<_>>()
+                )
             }
-            _ => query::QueryResult::NotImplemented
         }
     }
 
     pub fn insert(&mut self, row: &str, updates: Vec<mtable::MUpdate>) -> query::QueryResult {
-        self.memtable.insert(row, updates);
-        query::QueryResult::Done
+        match self.memtable.insert(row, updates) {
+            Ok(_)   => query::QueryResult::Done,
+            Err(dtable::TError::AlreadyExists)  => query::QueryResult::RowAlreadyExists,
+            Err(_) => query::QueryResult::InternalError
+        }
+    }
+
+    #[cfg(test)]
+    pub fn str_query(&mut self, input: &str) -> String {
+        format!("{}", self.query(query::Query::parse(input).unwrap()))
+    }
+
+    pub fn update(&mut self, row: &str, updates: Vec<mtable::MUpdate>) -> query::QueryResult {
+        match self.memtable.update(row, updates) {
+            Ok(_) => query::QueryResult::Done,
+            Err(dtable::TError::NotFound) => query::QueryResult::RowNotFound,
+            Err(_) => query::QueryResult::InternalError
+        }
     }
 
     pub fn select(&self, row: &str, cols: &[&str]) -> query::QueryResult {
         // First, try to query the mtable.
-        let mresult = vec![self.memtable.select(row, cols)];
+        let mresult = iter::once(&self.memtable)
+            .map(|m| m.select(row, cols));
 
         // Now, merge the results with those in the dtables.
         let dresults = self.disktables
@@ -92,24 +116,59 @@ impl Base {
 
         // Eliminate any misses, and collect up rows to merge.
         let results = mresult
-            .iter()
             .chain(dresults)
             .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
         match results.len() {
             0 => query::QueryResult::RowNotFound,
             _ => query::QueryResult::Data{columns: cols.iter()
                 .enumerate()
-                .map(|i, col| {
-                    for row in results {
+                .map(|(i, _)| {
+                    for row in &results {
                         if row[i].is_some() {
-                            return row[i];
+                            return row[i].clone();
                         }
                     }
                     return None
                 }).collect::<Vec<_>>()
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use query;
+
+    #[test]
+    fn test_insert() {
+        let mut database = super::Base::new();
+        database.load("./data").unwrap();
+
+        let done = format!("{}", query::QueryResult::Done);
+        let row_not_found = format!("{}", query::QueryResult::RowNotFound);
+
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "non-row", "get": []}}"#),
+            row_not_found
+        );
+
+        assert_eq!(
+            database.str_query(r#"{"insert": {"row": "non-row", "set": {"date": "01-01-1970", "weight": "12 kg"}}}"#),
+            done
+        );
+
+        assert_eq!(
+            database.str_query(r#"{"update": {"row": "non-row", "set": {"weight": "15 kg"}}}"#),
+            done
+        );
+
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "non-row", "get": ["date", "fate", "weight"]}}"#),
+            r#"Data: ["01-01-1970", None, "15 kg"]"#
+        );
     }
 }

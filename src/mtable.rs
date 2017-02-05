@@ -14,6 +14,7 @@ use protobuf;
 use protobuf::Message;
 
 use generated::dtable::*;
+use dtable;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MUpdate {
@@ -81,9 +82,9 @@ impl MTable {
         return MTable{rows: BTreeMap::new()};
     }
 
-    pub fn update(&mut self, row: &str, updates: Vec<MUpdate>) -> Result<(), io::Error>{
+    pub fn update(&mut self, row: &str, updates: Vec<MUpdate>) -> Result<(), dtable::TError>{
         return match self.rows.get_mut(row) {
-            None    => Err(io::Error::new(io::ErrorKind::NotFound, "No such row.")),
+            None    => Err(dtable::TError::NotFound),
             Some(r) => Ok(r.update(updates))
         };
     }
@@ -92,7 +93,11 @@ impl MTable {
         self.rows.get(row)
     }
 
-    pub fn insert(&mut self, row: &str, updates: Vec<MUpdate>) {
+    pub fn insert(&mut self, row: &str, updates: Vec<MUpdate>) -> Result<(), dtable::TError> {
+        if self.rows.get(row).is_some() {
+            return Err(dtable::TError::AlreadyExists);
+        }
+
         let r = MRow{
             columns: updates.into_iter().map(|update| {
                 let mut e = DEntry::new();
@@ -107,6 +112,8 @@ impl MTable {
             }).collect()
         };
         self.rows.insert(row.to_string(), r);
+
+        return Ok(());
     }
 
     pub fn select_one(&self, row: &str, col: &str) -> Option<Vec<u8>> {
@@ -193,7 +200,7 @@ mod tests {
         m.insert("rowname", vec![
             super::MUpdate::new("attr1", vec![1,2,3]),
             super::MUpdate::new("attr2", vec![4,5,6])
-        ]);
+        ]).unwrap();
         assert_eq!(
             format!("{}", m.get_row("rowname").unwrap()),
             "MRow: { attr1: [1, 2, 3], attr2: [4, 5, 6] }"
@@ -207,7 +214,7 @@ mod tests {
         m.insert("colin", vec![super::MUpdate::new(
             "marfans",
             vec![1]
-        )]);
+        )]).unwrap();
 
         m.update("colin", vec![super::MUpdate::new(
             "marfans",
@@ -235,7 +242,7 @@ mod tests {
             "harmony", "bell", "true", "imperfect", "towering", "icy", "belong"
         ];
         // Insert an empty row.
-        m.insert("colin", vec![]);
+        m.insert("colin", vec![]).unwrap();
 
         // Write all of the columns to the table.
         m.update(
@@ -308,7 +315,7 @@ mod tests {
 
         // Now construct a DTable from the MTable and query it.
         let header = std::fs::File::open("./data/test.dtable.header").unwrap();
-        let mut d = dtable::DTable::new(
+        let d = dtable::DTable::new(
             String::from("./data/test.dtable"),
             header
         ).unwrap();

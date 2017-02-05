@@ -19,6 +19,7 @@ pub struct DTable {
 pub enum TError {
     IoError,
     NotFound,
+    AlreadyExists
 }
 
 impl std::convert::From<std::io::Error> for TError {
