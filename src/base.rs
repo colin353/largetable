@@ -174,6 +174,15 @@ impl Base {
         self.disktables.push(
             dtable::DTable::new(format!("{}/{}.dtable.header", self.directory, self.disktable_index), h).map_err(|_| BaseError::CorruptedFiles)?
         );
+
+        // Delete the commit log, since we are writing it to disk.
+        println!("Truncating commit log.");
+        mem::replace(
+            &mut self.commit_log,
+            std::fs::File::create(format!("{}/commit.log", self.directory))
+                .map_err(|_| BaseError::CorruptedFiles)?
+        );
+
         Ok(())
     }
 
