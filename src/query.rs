@@ -34,6 +34,7 @@ pub enum QueryResult {
     RowAlreadyExists,
     InternalError,
     Done,
+    PartialCommit,
     Data{ columns: Vec<Option<Vec<u8>>> }
 }
 
@@ -88,6 +89,7 @@ impl fmt::Display for QueryResult {
             QueryResult::RowAlreadyExists => write!(f, "Row already exists."),
             QueryResult::InternalError    => write!(f, "Internal error."),
             QueryResult::NotImplemented   => write!(f, "Not implemented."),
+            QueryResult::PartialCommit    => write!(f, "Partial commit (!)"),
             QueryResult::Data{columns: ref c} => {
                 write!(f, "Data: [{}]", c.iter().map(|s| match *s {
                     Some(ref x) => {

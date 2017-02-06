@@ -12,7 +12,6 @@ use std::iter::FromIterator;
 use std::mem;
 use std::io::Read;
 use std::io::Write;
-use std::io::Seek;
 
 use regex;
 use mtable;
@@ -70,20 +69,20 @@ impl Base {
         let mut commit_log = std::fs::File::open(format!("{}/commit.log", self.directory))
             .map_err(|_| BaseError::CorruptedFiles)?;
 
+        let mut count = 0;
         loop {
             // Try to read an entry from the commit log. First, get the size
             // which is encoded as 4 bytes.
-            println!("new position {}", commit_log.seek(std::io::SeekFrom::Current(0)).unwrap());
             let size = match commit_log.read_u32::<LittleEndian>() {
                 Ok(n)   => n,
                 // If we reach end of file, we'll quit.
                 Err(e) => {
-                    println!("memtable: EOF ({})", e);
+                    println!("Read {} commit logs.", count);
                     return Ok(())
                 }
             };
 
-            println!("Read commit of length {}", size);
+            count += 1;
 
             // Next, load the next few bytes into a CommitLogUpdate.
             let mut buf = vec![0; size as usize]; //Vec::<u8>::with_capacity(size as usize);
@@ -91,8 +90,6 @@ impl Base {
                 .map_err(|_| BaseError::CorruptedFiles)?;
             let clu = protobuf::parse_from_bytes::<CommitLogEntry>(&buf)
                 .map_err(|_| BaseError::CorruptedFiles)?;
-
-            println!("Applied query on {:?}", clu.get_key());
 
             // Write the commit log update to the memtable.
             match self.direct_update(
@@ -103,6 +100,7 @@ impl Base {
                         u.get_column(),
                         u.get_value().to_owned()
                     )).collect::<Vec<_>>()
+                    .as_slice()
             ) {
                 query::QueryResult::Done => (),
                 _ => return Err(BaseError::CorruptedFiles)
@@ -241,11 +239,15 @@ impl Base {
     }
 
     pub fn insert(&mut self, row: &str, updates: Vec<mtable::MUpdate>) -> query::QueryResult {
-        self.commit(row, &updates);
-        match self.memtable.insert(row, updates) {
+        match self.memtable.insert(row, &updates) {
+            Ok(_)   => (),
+            Err(dtable::TError::AlreadyExists)  => return query::QueryResult::RowAlreadyExists,
+            Err(_) => return query::QueryResult::InternalError
+        };
+
+        match self.commit(row, &updates) {
             Ok(_)   => query::QueryResult::Done,
-            Err(dtable::TError::AlreadyExists)  => query::QueryResult::RowAlreadyExists,
-            Err(_) => query::QueryResult::InternalError
+            Err(_)  => query::QueryResult::PartialCommit
         }
     }
 
@@ -255,7 +257,7 @@ impl Base {
     }
 
     // This private method does an update without creating a commit log entry.
-    fn direct_update(&mut self, row: &str, updates: Vec<mtable::MUpdate>) -> query::QueryResult {
+    fn direct_update(&mut self, row: &str, updates: &[mtable::MUpdate]) -> query::QueryResult {
         match self.memtable.update(row, updates) {
             Ok(_) => query::QueryResult::Done,
             Err(dtable::TError::NotFound) => query::QueryResult::RowNotFound,
@@ -265,12 +267,15 @@ impl Base {
 
     // This function does a commit-then-update, using the private direct_update method.
     pub fn update(&mut self, row: &str, updates: Vec<mtable::MUpdate>) -> query::QueryResult {
-        match self.commit(row, &updates) {
-            Err(_) => return query::QueryResult::InternalError,
-            Ok(_)  => ()
+        match self.direct_update(row, &updates) {
+            query::QueryResult::Done => (),
+            x   => return x
         };
 
-        self.direct_update(row, updates)
+        match self.commit(row, &updates) {
+            Ok(_)   => query::QueryResult::Done,
+            Err(_)  => query::QueryResult::PartialCommit
+        }
     }
 
     pub fn select(&self, row: &str, cols: &[&str]) -> query::QueryResult {

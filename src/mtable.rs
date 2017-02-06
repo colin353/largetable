@@ -82,7 +82,7 @@ impl MTable {
         return MTable{rows: BTreeMap::new()};
     }
 
-    pub fn update(&mut self, row: &str, updates: Vec<MUpdate>) -> Result<(), dtable::TError>{
+    pub fn update(&mut self, row: &str, updates: &[MUpdate]) -> Result<(), dtable::TError>{
         match self.rows.get_mut(row) {
             None    => (),
             Some(r) => return Ok(r.update(updates))
@@ -95,7 +95,7 @@ impl MTable {
         self.rows.get(row)
     }
 
-    pub fn insert(&mut self, row: &str, updates: Vec<MUpdate>) -> Result<(), dtable::TError> {
+    pub fn insert(&mut self, row: &str, updates: &[MUpdate]) -> Result<(), dtable::TError> {
         if self.rows.get(row).is_some() {
             return Err(dtable::TError::AlreadyExists);
         }
@@ -104,7 +104,7 @@ impl MTable {
             columns: updates.into_iter().map(|update| {
                 let mut e = DEntry::new();
                 e.set_timestamp(100);
-                e.set_value(update.value);
+                e.set_value(update.value.clone());
 
                 let mut c = DColumn::new();
                 c.set_entries(protobuf::RepeatedField::from_vec(vec![e]));
@@ -164,13 +164,13 @@ impl MTable {
 }
 
 impl MRow {
-    fn update(&mut self, updates: Vec<MUpdate>) {
+    fn update(&mut self, updates: &[MUpdate]) {
         for update in updates {
             match self.columns.get_mut(&*update.key) {
                 Some(col) => {
                     let mut e = DEntry::new();
                     e.set_timestamp(100);
-                    e.set_value(update.value);
+                    e.set_value(update.value.clone());
                     col.mut_entries().push(e);
                     continue;
                 },
@@ -179,12 +179,12 @@ impl MRow {
 
             let mut e = DEntry::new();
             e.set_timestamp(100);
-            e.set_value(update.value);
+            e.set_value(update.value.clone());
 
             let mut c = DColumn::new();
             c.set_entries(protobuf::RepeatedField::from_vec(vec![e]));
 
-            self.columns.insert(update.key, c);
+            self.columns.insert(update.key.clone(), c);
         }
     }
 }
