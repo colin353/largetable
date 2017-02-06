@@ -22,3 +22,14 @@ message DTableHeaderEntry {
 message DTableHeader {
   repeated DTableHeaderEntry entries = 1;
 }
+
+message CommitLogUpdate {
+  string column = 1;
+  int64 timestamp = 2;
+  bytes value = 3;
+}
+
+message CommitLogEntry {
+  string key = 1;
+  repeated CommitLogUpdate updates = 2;
+}

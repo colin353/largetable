@@ -5,6 +5,7 @@ extern crate protobuf;
 extern crate linefeed;
 extern crate glob;
 extern crate regex;
+extern crate byteorder;
 
 mod query;
 mod mtable;
@@ -15,8 +16,8 @@ mod base;
 use linefeed::{Reader, ReadResult};
 
 fn main() {
-    let mut database = base::Base::new();
-    database.load("./data/").unwrap();
+    let mut database = base::Base::new("./data/");
+    database.load().unwrap();
 
     println!("largetable-cli v{}", env!("CARGO_PKG_VERSION"));
     let mut reader = Reader::new("largetable").unwrap();

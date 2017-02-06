@@ -11,6 +11,7 @@ serde_derive = "0.9"
 linefeed = "0.2.2"
 glob = "0.2"
 regex = "0.2"
+byteorder = "1"
 
 [dependencies.nickel]
 version = "*"
