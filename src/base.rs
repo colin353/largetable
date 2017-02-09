@@ -13,6 +13,7 @@ use std::mem;
 use std::io::Read;
 use std::io::Write;
 
+use time;
 use regex;
 use mtable;
 use dtable;
@@ -112,7 +113,8 @@ impl Base {
                         u.get_column(),
                         u.get_value().to_owned()
                     )).collect::<Vec<_>>()
-                    .as_slice()
+                    .as_slice(),
+                clu.get_timestamp()
             ) {
                 query::QueryResult::Done => (),
                 _ => return Err(BaseError::CorruptedFiles)
@@ -196,7 +198,12 @@ impl Base {
         Ok(())
     }
 
-    pub fn query(&mut self, q: query::Query) -> query::QueryResult {
+    // Run a query with timestamp set to now.
+    pub fn query_now(&mut self, q: query::Query) -> query::QueryResult {
+        self.query(q, time::precise_time_ns())
+    }
+
+    pub fn query(&mut self, q: query::Query, timestamp: u64) -> query::QueryResult {
         match q {
             query::Query::Select{row: r, get: g} => {
                 self.select(
@@ -204,7 +211,8 @@ impl Base {
                     g.iter()
                       .map(|s| s.as_str())
                       .collect::<Vec<&str>>()
-                      .as_slice()
+                      .as_slice(),
+                    timestamp
                  )
             },
             query::Query::Insert{row: r, set: s} => {
@@ -212,7 +220,8 @@ impl Base {
                     &r,
                     s.into_iter().map(|(key, value)|
                         mtable::MUpdate::new(key.as_str(), value.into_bytes())
-                    ).collect::<Vec<_>>()
+                    ).collect::<Vec<_>>(),
+                    timestamp
                 )
             },
             query::Query::Update{row: r, set: s} => {
@@ -220,23 +229,24 @@ impl Base {
                     &r,
                     s.into_iter().map(|(key, value)|
                         mtable::MUpdate::new(key.as_str(), value.into_bytes())
-                    ).collect::<Vec<_>>()
+                    ).collect::<Vec<_>>(),
+                    timestamp
                 )
             }
         }
     }
 
     // Publish an insert/update to the commit log.
-    pub fn commit(&mut self, row: &str, updates: &[mtable::MUpdate]) -> Result<(), BaseError> {
+    pub fn commit(&mut self, row: &str, updates: &[mtable::MUpdate], timestamp: u64) -> Result<(), BaseError> {
         let mut c = CommitLogEntry::new();
         c.set_key(row.to_owned());
+        c.set_timestamp(timestamp);
         c.set_updates(::protobuf::RepeatedField::from_iter(
             updates.iter()
                 .map(|u| {
                     let mut cu = CommitLogUpdate::new();
                     cu.set_column(u.key.to_owned());
                     cu.set_value(u.value.to_owned());
-                    cu.set_timestamp(200);
                     return cu;
                 })
         ));
@@ -250,14 +260,14 @@ impl Base {
         Ok(())
     }
 
-    pub fn insert(&mut self, row: &str, updates: Vec<mtable::MUpdate>) -> query::QueryResult {
-        match self.memtable.insert(row, &updates) {
+    pub fn insert(&mut self, row: &str, updates: Vec<mtable::MUpdate>, timestamp: u64) -> query::QueryResult {
+        match self.memtable.insert(row, &updates, timestamp) {
             Ok(_)   => (),
             Err(dtable::TError::AlreadyExists)  => return query::QueryResult::RowAlreadyExists,
             Err(_) => return query::QueryResult::InternalError
         };
 
-        match self.commit(row, &updates) {
+        match self.commit(row, &updates, timestamp) {
             Ok(_)   => query::QueryResult::Done,
             Err(_)  => query::QueryResult::PartialCommit
         }
@@ -265,12 +275,12 @@ impl Base {
 
     #[cfg(test)]
     pub fn str_query(&mut self, input: &str) -> String {
-        format!("{}", self.query(query::Query::parse(input).unwrap()))
+        format!("{}", self.query_now(query::Query::parse(input).unwrap()))
     }
 
     // This private method does an update without creating a commit log entry.
-    fn direct_update(&mut self, row: &str, updates: &[mtable::MUpdate]) -> query::QueryResult {
-        match self.memtable.update(row, updates) {
+    fn direct_update(&mut self, row: &str, updates: &[mtable::MUpdate], timestamp: u64) -> query::QueryResult {
+        match self.memtable.update(row, updates, timestamp) {
             Ok(_) => query::QueryResult::Done,
             Err(dtable::TError::NotFound) => query::QueryResult::RowNotFound,
             Err(_) => query::QueryResult::InternalError
@@ -278,19 +288,19 @@ impl Base {
     }
 
     // This function does a commit-then-update, using the private direct_update method.
-    pub fn update(&mut self, row: &str, updates: Vec<mtable::MUpdate>) -> query::QueryResult {
-        match self.direct_update(row, &updates) {
+    pub fn update(&mut self, row: &str, updates: Vec<mtable::MUpdate>, timestamp: u64) -> query::QueryResult {
+        match self.direct_update(row, &updates, timestamp) {
             query::QueryResult::Done => (),
             x   => return x
         };
 
-        match self.commit(row, &updates) {
+        match self.commit(row, &updates, timestamp) {
             Ok(_)   => query::QueryResult::Done,
             Err(_)  => query::QueryResult::PartialCommit
         }
     }
 
-    pub fn select(&self, row: &str, cols: &[&str]) -> query::QueryResult {
+    pub fn select(&self, row: &str, cols: &[&str], timestamp: u64) -> query::QueryResult {
         // First, try to query the mtable.
         let mresult = iter::once(&self.memtable)
             .map(|m| m.select(row, cols));
@@ -312,12 +322,24 @@ impl Base {
             _ => query::QueryResult::Data{columns: cols.iter()
                 .enumerate()
                 .map(|(i, _)| {
-                    for row in &results {
-                        if row[i].is_some() {
-                            return row[i].clone();
+                    let mut newest_timestamp = 0;
+                    let mut newest_index = 0;
+                    for (j, row) in results.iter().enumerate() {
+                        match row[i] {
+                            Some(ref r) if r.get_timestamp() > newest_timestamp => {
+                                newest_timestamp = r.timestamp;
+                                newest_index = j;
+                            }
+                            Some(_) | None => continue
                         }
                     }
-                    return None
+                    match newest_timestamp {
+                        0 => None,
+                        _ => Some(match results[newest_index][i] {
+                            Some(ref r) => r.get_value().to_vec(),
+                            None        => panic!("This should never occur.")
+                        })
+                    }
                 }).collect::<Vec<_>>()
             }
         }
@@ -384,7 +406,7 @@ mod tests {
                 }
 
                 f.read_line(&mut result).unwrap();
-                
+
                 assert_eq!(
                     database.str_query(command.as_str().trim()),
                     result.trim()

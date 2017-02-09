@@ -29,11 +29,11 @@ impl std::convert::From<std::io::Error> for TError {
 }
 
 impl DColumn {
-    pub fn get_value(&self) -> Result<Vec<u8>, TError> {
+    pub fn get_value(&self) -> Result<DEntry, TError> {
         let entries = self.get_entries();
         match entries.len() {
             0 => Err(TError::NotFound),
-            n => Ok(entries[n-1].get_value().to_owned())
+            n => Ok(entries[n-1].clone())
         }
     }
 }
@@ -55,7 +55,7 @@ impl DRow {
         return Err(TError::NotFound);
     }
 
-    pub fn get_value(&self, key: &str) -> Result<Vec<u8>, TError> {
+    pub fn get_value(&self, key: &str) -> Result<DEntry, TError> {
         self.get_column(key)?.get_value()
     }
 }
@@ -67,7 +67,7 @@ impl std::fmt::Display for DRow {
             "DRow: {{ {} }}",
                 self.get_keys()
                 .iter()
-                .map(|s| format!("{}: {:?}", s, self.get_value(s).unwrap()))
+                .map(|s| format!("{}: {:?}", s, self.get_value(s).unwrap().get_value()))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -122,7 +122,7 @@ impl DTable {
     pub fn select_one(&self, row: &str, col: &str) -> Option<Vec<u8>> {
         match self.select(row, &[col]) {
             Some(ref result) => match result[0] {
-                Some(ref value) => Some(value.clone()),
+                Some(ref value) => Some(value.get_value().to_owned()),
                 None        => None
             },
             None => None

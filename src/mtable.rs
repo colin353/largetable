@@ -22,7 +22,7 @@ pub struct MUpdate {
     pub key: String
 }
 
-pub type TOption = Option<Vec<Option<Vec<u8>>>>;
+pub type TOption = Option<Vec<Option<DEntry>>>;
 
 impl MUpdate {
     pub fn new(key: &str, value: Vec<u8>) -> MUpdate {
@@ -70,7 +70,7 @@ impl fmt::Display for MRow {
             "MRow: {{ {} }}",
                 self.columns
                 .iter()
-                .map(|(k, v)| format!("{}: {:?}", k, v.get_value().unwrap()))
+                .map(|(k, v)| format!("{}: {:?}", k, v.get_value().unwrap().get_value()))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -82,20 +82,20 @@ impl MTable {
         return MTable{rows: BTreeMap::new()};
     }
 
-    pub fn update(&mut self, row: &str, updates: &[MUpdate]) -> Result<(), dtable::TError>{
+    pub fn update(&mut self, row: &str, updates: &[MUpdate], timestamp: u64) -> Result<(), dtable::TError>{
         match self.rows.get_mut(row) {
             None    => (),
-            Some(r) => return Ok(r.update(updates))
+            Some(r) => return Ok(r.update(updates, timestamp))
         };
 
-        self.insert(row, updates)
+        self.insert(row, updates, timestamp)
     }
 
     pub fn get_row(&self, row: &str) -> Option<&MRow> {
         self.rows.get(row)
     }
 
-    pub fn insert(&mut self, row: &str, updates: &[MUpdate]) -> Result<(), dtable::TError> {
+    pub fn insert(&mut self, row: &str, updates: &[MUpdate], timestamp: u64) -> Result<(), dtable::TError> {
         if self.rows.get(row).is_some() {
             return Err(dtable::TError::AlreadyExists);
         }
@@ -103,7 +103,7 @@ impl MTable {
         let r = MRow{
             columns: updates.into_iter().map(|update| {
                 let mut e = DEntry::new();
-                e.set_timestamp(100);
+                e.set_timestamp(timestamp);
                 e.set_value(update.value.clone());
 
                 let mut c = DColumn::new();
@@ -118,11 +118,13 @@ impl MTable {
         return Ok(());
     }
 
-    pub fn select_one(&self, row: &str, col: &str) -> Option<Vec<u8>> {
+    pub fn select_one(&self, row: &str, col: &str) -> Option<DEntry> {
         match self.select(row, &[col]) {
             Some(ref result) => match result[0] {
-                Some(ref value) => Some(value.clone()),
-                None        => None
+                Some(ref value) => {
+                    Some(value.clone())
+                }
+                None => None
             },
             None => None
         }
@@ -164,12 +166,12 @@ impl MTable {
 }
 
 impl MRow {
-    fn update(&mut self, updates: &[MUpdate]) {
+    fn update(&mut self, updates: &[MUpdate], timestamp: u64) {
         for update in updates {
             match self.columns.get_mut(&*update.key) {
                 Some(col) => {
                     let mut e = DEntry::new();
-                    e.set_timestamp(100);
+                    e.set_timestamp(timestamp);
                     e.set_value(update.value.clone());
                     col.mut_entries().push(e);
                     continue;
@@ -178,7 +180,7 @@ impl MRow {
             }
 
             let mut e = DEntry::new();
-            e.set_timestamp(100);
+            e.set_timestamp(timestamp);
             e.set_value(update.value.clone());
 
             let mut c = DColumn::new();
@@ -195,6 +197,7 @@ mod tests {
     use protobuf;
     use generated::dtable::DRow as DRow;
     use dtable;
+    use time;
 
     #[test]
     fn can_print_mrow() {
@@ -202,7 +205,7 @@ mod tests {
         m.insert("rowname", &[
             super::MUpdate::new("attr1", vec![1,2,3]),
             super::MUpdate::new("attr2", vec![4,5,6])
-        ]).unwrap();
+        ], time::precise_time_ns()).unwrap();
         assert_eq!(
             format!("{}", m.get_row("rowname").unwrap()),
             "MRow: { attr1: [1, 2, 3], attr2: [4, 5, 6] }"
@@ -214,23 +217,23 @@ mod tests {
         let mut m = super::MTable::new();
 
         m.insert("colin", &[super::MUpdate::new(
-            "marfans",
+            "asdf",
             vec![1]
-        )]).unwrap();
+        )], time::precise_time_ns()).unwrap();
 
         m.update("colin", &[super::MUpdate::new(
-            "marfans",
+            "asdf",
             vec![5]
-        )]).unwrap();
+        )], time::precise_time_ns()).unwrap();
 
         m.update("colin", &[super::MUpdate::new(
-            "friends",
+            "fdsa",
             vec![12,23]
-        )]).unwrap();
+        )], time::precise_time_ns()).unwrap();
 
-        assert_eq!(m.select_one("colin", "marfans").unwrap(), &[5]);
-        assert_eq!(m.select_one("colin", "friends").unwrap(), &[12,23]);
-        assert!(m.select_one("colin", "marfonzo").is_none());
+        assert_eq!(m.select_one("colin", "asdf").unwrap().get_value(), &[5]);
+        assert_eq!(m.select_one("colin", "fdsa").unwrap().get_value(), &[12,23]);
+        assert!(m.select_one("colin", "fake").is_none());
     }
 
     #[test]
@@ -244,7 +247,7 @@ mod tests {
             "harmony", "bell", "true", "imperfect", "towering", "icy", "belong"
         ];
         // Insert an empty row.
-        m.insert("colin", &[]).unwrap();
+        m.insert("colin", &[], time::precise_time_ns()).unwrap();
 
         // Write all of the columns to the table.
         m.update(
@@ -253,7 +256,8 @@ mod tests {
             .enumerate()
             .map(|(index, value)| super::MUpdate::new(
                 value, vec![index as u8]
-            )).collect::<Vec<_>>().as_slice()
+            )).collect::<Vec<_>>().as_slice(),
+            time::precise_time_ns()
         ).unwrap();
 
         // Write the MRow to a file.
@@ -268,7 +272,7 @@ mod tests {
         // correctly inserted into the row.
         for (index, value) in w.iter().enumerate() {
             assert_eq!(
-                row.get_value(value).unwrap(),
+                row.get_value(value).unwrap().get_value(),
                 &[index as u8]
             )
         }
@@ -297,7 +301,8 @@ mod tests {
             x.iter()
             .enumerate()
             .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
-            .collect::<Vec<_>>().as_slice()
+            .collect::<Vec<_>>().as_slice(),
+            time::precise_time_ns()
         );
 
         m.insert(
@@ -305,7 +310,8 @@ mod tests {
             y.iter()
             .enumerate()
             .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
-            .collect::<Vec<_>>().as_slice()
+            .collect::<Vec<_>>().as_slice(),
+            time::precise_time_ns()
         );
 
         println!("{}", m.get_row("row1").unwrap());

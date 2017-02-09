@@ -6,6 +6,7 @@ extern crate linefeed;
 extern crate glob;
 extern crate regex;
 extern crate byteorder;
+extern crate time;
 
 mod query;
 mod mtable;
@@ -44,7 +45,7 @@ fn main() {
             x => {
                 match query::Query::parse(&x) {
                     Ok(query)   => {
-                        println!("{}", database.query(query))
+                        println!("{}", database.query_now(query))
                     }
                     Err(_)  => println!("That didn't parse.")
                 }
