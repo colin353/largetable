@@ -12,6 +12,7 @@ use std::iter::FromIterator;
 use std::mem;
 use std::io::Read;
 use std::io::Write;
+use std::thread;
 
 use time;
 use regex;
@@ -57,10 +58,17 @@ impl Base {
     }
 
     pub fn new_stub() -> Base {
-        let log = std::fs::File::create("/tmp/commit_stub").unwrap();
+        // First, delete the /tmp/largetable directory and it's
+        // contents. Then recreate the directory.
+        std::fs::remove_dir_all("/tmp/largetable").unwrap_or(());
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::fs::create_dir_all("/tmp/largetable").unwrap_or(());
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let log = std::fs::File::create("/tmp/largetable/commit.log").unwrap();
 
         Base{
-            directory: String::from("/tmp"),
+            directory: String::from("/tmp/largetable"),
             disktable_index: 0,
             memtable: mtable::MTable::new(),
             disktables: vec![],
@@ -324,13 +332,19 @@ impl Base {
                 .map(|(i, _)| {
                     let mut newest_timestamp = 0;
                     let mut newest_index = 0;
+                    println!("Examining column {}...", i);
                     for (j, row) in results.iter().enumerate() {
+                        println!("Checking source {}...", j);
                         match row[i] {
-                            Some(ref r) if r.get_timestamp() > newest_timestamp => {
-                                newest_timestamp = r.timestamp;
+                            Some(ref r) if r.get_timestamp() <= timestamp && r.get_timestamp() > newest_timestamp => {
+                                newest_timestamp = r.get_timestamp();
+                                println!("Picked up new timestamp: {}", newest_timestamp);
                                 newest_index = j;
                             }
-                            Some(_) | None => continue
+                            Some(ref r) => {
+                                println!("Ignored timestamp: {}", r.get_timestamp());
+                            },
+                            None => continue
                         }
                     }
                     match newest_timestamp {
@@ -380,6 +394,60 @@ mod tests {
         assert_eq!(
             database.str_query(r#"{"select": {"row": "non-row", "get": ["date", "fate", "weight"]}}"#),
             r#"Data: ["01-01-1970", None, "15 kg"]"#
+        );
+    }
+
+    #[test]
+    fn can_flush_and_query() {
+        let mut database = super::Base::new_stub();
+        database.load().unwrap();
+
+        database.query_now(
+            query::Query::parse(r#"{"insert": {"row": "write_test", "set": {"value": "OK"}}}"#).unwrap()
+        );
+        database.empty_memtable().unwrap();
+
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "write_test", "get": ["value"]}}"#),
+            r#"Data: ["OK"]"#
+        );
+    }
+
+    #[test]
+    fn check_timestamp_select() {
+        // We need to make sure that the system will serve data from
+        // a DTable if it has a newer timestamp than that in the MTable.
+        let mut database = super::Base::new_stub();
+        database.load().unwrap();
+
+        database.query(
+            query::Query::parse(r#"{"insert": {"row": "timestamp_test", "set": {"clock": "dtable"}}}"#).unwrap(),
+            120
+        );
+        // Flush the memtable to disk.
+        database.empty_memtable().unwrap();
+
+        // Write an older record to the memtable.
+        database.query(
+            query::Query::parse(r#"{"update": {"row": "timestamp_test", "set": {"clock": "memtable", "clock2": "t=100"}}}"#).unwrap(),
+            100
+        );
+
+        // Now when we request the data back, we expect the value from the dtable.
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "timestamp_test", "get": ["clock"]}}"#),
+            r#"Data: ["dtable"]"#
+        );
+
+        // As an extra trick, write older data to the memtable, and then
+        // query it to see if still returns the most recent value.
+        database.query(
+            query::Query::parse(r#"{"update": {"row": "timestamp_test", "set": {"clock2": "t=90"}}}"#).unwrap(),
+            90
+        );
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "timestamp_test", "get": ["clock2"]}}"#),
+            r#"Data: ["t=100"]"#
         );
     }
 

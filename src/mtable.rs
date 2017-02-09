@@ -176,7 +176,7 @@ impl MRow {
                     col.mut_entries().push(e);
                     continue;
                 },
-                None    => ()
+                None => ()
             }
 
             let mut e = DEntry::new();
@@ -303,7 +303,7 @@ mod tests {
             .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
             .collect::<Vec<_>>().as_slice(),
             time::precise_time_ns()
-        );
+        ).unwrap();
 
         m.insert(
             "row2",
@@ -312,7 +312,7 @@ mod tests {
             .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
             .collect::<Vec<_>>().as_slice(),
             time::precise_time_ns()
-        );
+        ).unwrap();
 
         println!("{}", m.get_row("row1").unwrap());
 
