@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn can_print_mrow() {
         let mut m = super::MTable::new();
-        m.insert("rowname", vec![
+        m.insert("rowname", &[
             super::MUpdate::new("attr1", vec![1,2,3]),
             super::MUpdate::new("attr2", vec![4,5,6])
         ]).unwrap();
@@ -213,17 +213,17 @@ mod tests {
     fn can_insert_update_and_select() {
         let mut m = super::MTable::new();
 
-        m.insert("colin", vec![super::MUpdate::new(
+        m.insert("colin", &[super::MUpdate::new(
             "marfans",
             vec![1]
         )]).unwrap();
 
-        m.update("colin", vec![super::MUpdate::new(
+        m.update("colin", &[super::MUpdate::new(
             "marfans",
             vec![5]
         )]).unwrap();
 
-        m.update("colin", vec![super::MUpdate::new(
+        m.update("colin", &[super::MUpdate::new(
             "friends",
             vec![12,23]
         )]).unwrap();
@@ -244,7 +244,7 @@ mod tests {
             "harmony", "bell", "true", "imperfect", "towering", "icy", "belong"
         ];
         // Insert an empty row.
-        m.insert("colin", vec![]).unwrap();
+        m.insert("colin", &[]).unwrap();
 
         // Write all of the columns to the table.
         m.update(
@@ -253,7 +253,7 @@ mod tests {
             .enumerate()
             .map(|(index, value)| super::MUpdate::new(
                 value, vec![index as u8]
-            )).collect::<Vec<_>>()
+            )).collect::<Vec<_>>().as_slice()
         ).unwrap();
 
         // Write the MRow to a file.
@@ -297,7 +297,7 @@ mod tests {
             x.iter()
             .enumerate()
             .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>().as_slice()
         );
 
         m.insert(
@@ -305,7 +305,7 @@ mod tests {
             y.iter()
             .enumerate()
             .map(|(index, word)| super::MUpdate::new(word, vec![index as u8]))
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>().as_slice()
         );
 
         println!("{}", m.get_row("row1").unwrap());

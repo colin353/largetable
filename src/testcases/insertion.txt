@@ -1,0 +1,10 @@
+{"insert": { "row": "mem", "set": { "name": "most recent mem" }}}
+OK.
+{"select": { "row": "mem", "get": ["name"]}}
+Data: ["most recent mem"]
+{"update": { "row": "mem", "set": { "name": "yet another mem", "col2": "another value" }}}
+OK.
+{"select": { "row": "mem", "get": ["name", "col2"]}}
+Data: ["yet another mem", "another value"]
+{"select": { "row": "mem", "get": ["not a real column"]}}
+Data: [None]

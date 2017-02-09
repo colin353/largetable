@@ -55,6 +55,18 @@ impl Base {
         }
     }
 
+    pub fn new_stub() -> Base {
+        let log = std::fs::File::create("/tmp/commit_stub").unwrap();
+
+        Base{
+            directory: String::from("/tmp"),
+            disktable_index: 0,
+            memtable: mtable::MTable::new(),
+            disktables: vec![],
+            commit_log: log
+        }
+    }
+
     // Try to load the complete state of the database from the filesystem.
     pub fn load(&mut self) -> Result<(), BaseError> {
         self.load_mtable()?;
@@ -76,7 +88,7 @@ impl Base {
             let size = match commit_log.read_u32::<LittleEndian>() {
                 Ok(n)   => n,
                 // If we reach end of file, we'll quit.
-                Err(e) => {
+                Err(_) => {
                     println!("Read {} commit logs.", count);
                     return Ok(())
                 }
@@ -316,11 +328,14 @@ impl Base {
 #[cfg(test)]
 mod tests {
     use query;
+    use glob::glob;
+    use std::io;
+    use std::fs;
+    use std::io::BufRead;
 
     #[test]
     fn test_insert() {
-        let mut database = super::Base::new();
-        database.load("./data").unwrap();
+        let mut database = super::Base::new("./data");
 
         let done = format!("{}", query::QueryResult::Done);
         let row_not_found = format!("{}", query::QueryResult::RowNotFound);
@@ -344,5 +359,38 @@ mod tests {
             database.str_query(r#"{"select": {"row": "non-row", "get": ["date", "fate", "weight"]}}"#),
             r#"Data: ["01-01-1970", None, "15 kg"]"#
         );
+    }
+
+    #[test]
+    fn test_cases() {
+        let mut database = super::Base::new_stub();
+
+        let entries = glob(&format!("./src/testcases/*.txt")).unwrap();
+        for entry in entries {
+            let data_path = entry.unwrap();
+            let mut f = io::BufReader::new(fs::File::open(&data_path.to_str().unwrap()).unwrap());
+
+            loop {
+                let mut command = String::new();
+                let mut result  = String::new();
+                match f.read_line(&mut command) {
+                    Ok(s)   => s,
+                    Err(_)  => break
+                };
+
+                // In case we leave some blank lines, don't fail.
+                if command.trim() == "" {
+                    break;
+                }
+
+                f.read_line(&mut result).unwrap();
+                
+                assert_eq!(
+                    database.str_query(command.as_str().trim()),
+                    result.trim()
+                );
+            }
+        }
+
     }
 }
