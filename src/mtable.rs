@@ -173,7 +173,20 @@ impl MRow {
                     let mut e = DEntry::new();
                     e.set_timestamp(timestamp);
                     e.set_value(update.value.clone());
-                    col.mut_entries().push(e);
+                    // We need to make sure we are inserting it at the
+                    // correct point. We'll start from the end of the array
+                    // and search backward until we see a number less than our
+                    // target timestamp, and then insert at that index.
+                    let mut entries = col.mut_entries();
+                    let mut insertion_index = 0;
+                    for (index, value) in entries.iter().enumerate() {
+                        if value.get_timestamp() > timestamp {
+                            insertion_index = index;
+                            println!("chose insertion index {}", insertion_index);
+                            break;
+                        }
+                    }
+                    entries.insert(insertion_index, e);
                     continue;
                 },
                 None => ()
@@ -313,8 +326,6 @@ mod tests {
             .collect::<Vec<_>>().as_slice(),
             time::precise_time_ns()
         ).unwrap();
-
-        println!("{}", m.get_row("row1").unwrap());
 
         // Now write the MTable to a file.
         let mut data = std::fs::File::create("./data/0.dtable").unwrap();

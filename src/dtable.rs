@@ -156,6 +156,8 @@ impl DTable {
         return match offset.length {
             Some(n) => protobuf::parse_from_reader::<DRow>(&mut file.take(n)),
             None    => protobuf::parse_from_reader::<DRow>(&mut file)
-        }.map_err(|_| TError::IoError);
+        }.map_err(|_| {
+            TError::IoError
+        });
     }
 }

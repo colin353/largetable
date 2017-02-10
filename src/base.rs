@@ -12,7 +12,6 @@ use std::iter::FromIterator;
 use std::mem;
 use std::io::Read;
 use std::io::Write;
-use std::thread;
 
 use time;
 use regex;
@@ -181,6 +180,10 @@ impl Base {
 
             println!("Writing memtable to disk.");
             self.memtable.write_to_writer(&mut f, &mut h).map_err(|_| BaseError::CorruptedFiles)?;
+
+            // Flush all buffers to disk.
+            f.flush().map_err(|_| BaseError::CorruptedFiles)?;
+            h.flush().map_err(|_| BaseError::CorruptedFiles)?;
         }
 
         println!("Emptying memtable.");
@@ -189,10 +192,13 @@ impl Base {
         println!("Reading fresh dtable.");
         let h = std::fs::File::open(
             format!("{}/{}.dtable.header", self.directory, self.disktable_index)
-        ).map_err(|_| BaseError::CorruptedFiles)?;
+        ).map_err(|e| {
+            println!("Error: {:?}", e);
+            BaseError::CorruptedFiles
+        })?;
 
         self.disktables.push(
-            dtable::DTable::new(format!("{}/{}.dtable.header", self.directory, self.disktable_index), h).map_err(|_| BaseError::CorruptedFiles)?
+            dtable::DTable::new(format!("{}/{}.dtable", self.directory, self.disktable_index), h).map_err(|_| BaseError::CorruptedFiles)?
         );
 
         // Delete the commit log, since we are writing it to disk.
@@ -260,7 +266,6 @@ impl Base {
         ));
 
         let size = c.compute_size();
-        println!("Writing commit, length = {}", size);
         self.commit_log.write_u32::<LittleEndian>(size).map_err(|_| BaseError::CorruptedFiles)?;
 
         c.write_to_writer(&mut self.commit_log).map_err(|_| BaseError::CorruptedFiles)?;
@@ -332,19 +337,13 @@ impl Base {
                 .map(|(i, _)| {
                     let mut newest_timestamp = 0;
                     let mut newest_index = 0;
-                    println!("Examining column {}...", i);
                     for (j, row) in results.iter().enumerate() {
-                        println!("Checking source {}...", j);
                         match row[i] {
                             Some(ref r) if r.get_timestamp() <= timestamp && r.get_timestamp() > newest_timestamp => {
                                 newest_timestamp = r.get_timestamp();
-                                println!("Picked up new timestamp: {}", newest_timestamp);
                                 newest_index = j;
-                            }
-                            Some(ref r) => {
-                                println!("Ignored timestamp: {}", r.get_timestamp());
                             },
-                            None => continue
+                            Some(_) | None => continue
                         }
                     }
                     match newest_timestamp {
@@ -405,6 +404,11 @@ mod tests {
         database.query_now(
             query::Query::parse(r#"{"insert": {"row": "write_test", "set": {"value": "OK"}}}"#).unwrap()
         );
+        database.query_now(
+            query::Query::parse(r#"{"insert": {"row": "write_test2", "set": {"value": "OK"}}}"#).unwrap()
+        );
+
+        println!("About to empty memtable.");
         database.empty_memtable().unwrap();
 
         assert_eq!(
@@ -445,9 +449,21 @@ mod tests {
             query::Query::parse(r#"{"update": {"row": "timestamp_test", "set": {"clock2": "t=90"}}}"#).unwrap(),
             90
         );
+        database.query(
+            query::Query::parse(r#"{"update": {"row": "timestamp_test", "set": {"clock2": "t=95"}}}"#).unwrap(),
+            95
+        );
         assert_eq!(
             database.str_query(r#"{"select": {"row": "timestamp_test", "get": ["clock2"]}}"#),
             r#"Data: ["t=100"]"#
+        );
+        database.query(
+            query::Query::parse(r#"{"update": {"row": "timestamp_test", "set": {"clock2": "t=110"}}}"#).unwrap(),
+            110
+        );
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "timestamp_test", "get": ["clock2"]}}"#),
+            r#"Data: ["t=110"]"#
         );
     }
 
