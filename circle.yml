@@ -13,14 +13,16 @@ dependencies:
     - sudo mv bin/protoc /usr/local/bin/protoc
     - curl https://sh.rustup.rs -sSf | sh /dev/stdin -y
     # Install components for coverage testing w/ kcov
-    - sudo apt-get install kcov libncursesw5-dev binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
-    #- git clone https://github.com/SimonKagstrom/kcov.git
-    #- mkdir kcov/build
-    #- cd kcov/build; cmake ../; make; sudo make install;
+    - sudo apt-get install libncursesw5-dev binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
+    - git clone https://github.com/SimonKagstrom/kcov.git
+    - mkdir kcov/build
+    - cd kcov/build; cmake ../; make; sudo make install;
 test:
   override:
     - ~/.cargo/bin/cargo install protobuf
     # Synthesize generated files.
     - protoc --rust_out src/generated src/protobuf/dtable.proto
     - ~/.cargo/bin/cargo test --bin largetable-cli
-    - kcov target/cov target/debug/largetable-cli
+    # Upload code coverage statement to codecov.io
+    - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done
+    - bash <(curl -s https://codecov.io/bash)
