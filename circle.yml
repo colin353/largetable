@@ -1,10 +1,21 @@
+machine:
+  environment:
+    PATH: $PATH:/home/ubuntu/.cargo/bin
 dependencies:
+  cache_directories:
+    - "/home/ubuntu/.cargo"
   override:
     # It's necessary to delete this file, because it rewrites a bunch
     # of URLs that Cargo tries to access, and messes everything up.
     - rm ~/.gitconfig
-    - curl https://sh.rustup.rs -sSf | sh
+    - wget https://github.com/google/protobuf/releases/download/v3.0.0/protoc-3.0.0-linux-x86_64.zip
+    - unzip protoc-3.0.0-linux-x86_64.zip
+    - curl https://sh.rustup.rs -sSf | sh /dev/stdin -y
+    - sudo apt-get install libncursesw5-dev
 test:
   override:
-    - cargo test --bin largetable-cli
-    - cargo test --bin largetable
+    - ~/.cargo/bin/cargo install protobuf
+    # Synthesize generated files.
+    - /home/ubuntu/bin/protoc --rust_out src/generated src/protobuf/dtable.proto
+    - ~/.cargo/bin/cargo test --bin largetable-cli
+    - ~/.cargo/bin/cargo test --bin largetable
