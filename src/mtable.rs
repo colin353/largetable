@@ -7,6 +7,7 @@
 use std::io;
 use std::fmt;
 use std::str::FromStr;
+use std::u64;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 
@@ -70,7 +71,7 @@ impl fmt::Display for MRow {
             "MRow: {{ {} }}",
                 self.columns
                 .iter()
-                .map(|(k, v)| format!("{}: {:?}", k, v.get_value().unwrap().get_value()))
+                .map(|(k, v)| format!("{}: {:?}", k, v.get_latest_value().unwrap().get_value()))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -118,8 +119,9 @@ impl MTable {
         return Ok(());
     }
 
+    #[cfg(test)]
     pub fn select_one(&self, row: &str, col: &str) -> Option<DEntry> {
-        match self.select(row, &[col]) {
+        match self.select(row, &[col], ::std::u64::MAX) {
             Some(ref result) => match result[0] {
                 Some(ref value) => {
                     Some(value.clone())
@@ -130,7 +132,7 @@ impl MTable {
         }
     }
 
-    pub fn select(&self, row: &str, cols: &[&str]) -> TOption {
+    pub fn select(&self, row: &str, cols: &[&str], timestamp: u64) -> TOption {
         let r = match self.rows.get(row) {
             Some(r) => r,
             None    => return None
@@ -138,7 +140,7 @@ impl MTable {
 
         Some(cols.iter()
                  .map(|column| match r.columns.get(column.clone()) {
-                    Some(c) => c.get_value().ok(),
+                    Some(c) => c.get_value(timestamp).ok(),
                     None => None
             }).collect::<Vec<_>>()
         )
@@ -173,6 +175,7 @@ impl MRow {
                     let mut e = DEntry::new();
                     e.set_timestamp(timestamp);
                     e.set_value(update.value.clone());
+
                     // We need to make sure we are inserting it at the
                     // correct point. We'll start from the end of the array
                     // and search backward until we see a number less than our
@@ -284,13 +287,13 @@ mod tests {
         // correctly inserted into the row.
         for (index, value) in w.iter().enumerate() {
             assert_eq!(
-                row.get_value(value).unwrap().get_value(),
+                row.get_latest_value(value).unwrap().get_value(),
                 &[index as u8]
             )
         }
 
         // Check that invalid entries are not present.
-        row.get_value("clapton").unwrap_err();
+        row.get_latest_value("clapton").unwrap_err();
     }
 
     #[test]

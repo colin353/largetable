@@ -317,12 +317,12 @@ impl Base {
     pub fn select(&self, row: &str, cols: &[&str], timestamp: u64) -> query::QueryResult {
         // First, try to query the mtable.
         let mresult = iter::once(&self.memtable)
-            .map(|m| m.select(row, cols));
+            .map(|m| m.select(row, cols, timestamp));
 
         // Now, merge the results with those in the dtables.
         let dresults = self.disktables
             .iter()
-            .map((|d| d.select(row, cols)));
+            .map((|d| d.select(row, cols, timestamp)));
 
         // Eliminate any misses, and collect up rows to merge.
         let results = mresult
@@ -344,7 +344,10 @@ impl Base {
                                 newest_timestamp = r.get_timestamp();
                                 newest_index = j;
                             },
-                            Some(_) | None => continue
+                            Some(ref r) => {
+                                println!("Ignored value with timestamp = {}", r.get_timestamp());
+                            },
+                            None => continue
                         }
                     }
                     match newest_timestamp {
@@ -359,7 +362,6 @@ impl Base {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -465,6 +467,16 @@ mod tests {
         assert_eq!(
             database.str_query(r#"{"select": {"row": "timestamp_test", "get": ["clock2"]}}"#),
             r#"Data: ["t=110"]"#
+        );
+
+        // When selecting at a specific timestamp, should get an older
+        // snapshot.
+        assert_eq!(
+            format!("{}", database.query(
+                query::Query::parse(r#"{"select": {"row": "timestamp_test", "get": ["clock2"]}}"#).unwrap(),
+                105
+            )),
+            r#"Data: ["t=100"]"#
         );
     }
 

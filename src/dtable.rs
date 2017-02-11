@@ -29,11 +29,24 @@ impl std::convert::From<std::io::Error> for TError {
 }
 
 impl DColumn {
-    pub fn get_value(&self) -> Result<DEntry, TError> {
+    pub fn get_latest_value(&self) -> Result<DEntry, TError> {
+        self.get_value(std::u64::MAX)
+    }
+
+    pub fn get_value(&self, timestamp: u64) -> Result<DEntry, TError> {
         let entries = self.get_entries();
         match entries.len() {
             0 => Err(TError::NotFound),
-            n => Ok(entries[n-1].clone())
+            n => {
+                let mut index = n-1;
+                for i in (0..n).rev() {
+                    if entries[i].get_timestamp() <= timestamp {
+                        index = i;
+                        break;
+                    }
+                }
+                Ok(entries[index].clone())
+            }
         }
     }
 }
@@ -55,8 +68,12 @@ impl DRow {
         return Err(TError::NotFound);
     }
 
-    pub fn get_value(&self, key: &str) -> Result<DEntry, TError> {
-        self.get_column(key)?.get_value()
+    pub fn get_latest_value(&self, key: &str) -> Result<DEntry, TError> {
+        self.get_column(key)?.get_latest_value()
+    }
+
+    pub fn get_value(&self, key: &str, timestamp: u64) -> Result<DEntry, TError> {
+        self.get_column(key)?.get_value(timestamp)
     }
 }
 
@@ -67,7 +84,7 @@ impl std::fmt::Display for DRow {
             "DRow: {{ {} }}",
                 self.get_keys()
                 .iter()
-                .map(|s| format!("{}: {:?}", s, self.get_value(s).unwrap().get_value()))
+                .map(|s| format!("{}: {:?}", s, self.get_latest_value(s).unwrap().get_value()))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -119,8 +136,9 @@ impl DTable {
         std::fs::File::open(&self.filename)
     }
 
+    #[cfg(test)]
     pub fn select_one(&self, row: &str, col: &str) -> Option<Vec<u8>> {
-        match self.select(row, &[col]) {
+        match self.select(row, &[col], std::u64::MAX) {
             Some(ref result) => match result[0] {
                 Some(ref value) => Some(value.get_value().to_owned()),
                 None        => None
@@ -129,14 +147,14 @@ impl DTable {
         }
     }
 
-    pub fn select(&self, row: &str, cols: &[&str]) -> mtable::TOption {
+    pub fn select(&self, row: &str, cols: &[&str], timestamp: u64) -> mtable::TOption {
         let row = match self.get_row(row) {
             Ok(r)   => r,
             Err(_)  => return None
         };
 
         return Some(cols.iter().map(|col| {
-            match row.get_value(col) {
+            match row.get_value(col, timestamp) {
                 Ok(v)   => Some(v),
                 Err(_)  => None
             }
