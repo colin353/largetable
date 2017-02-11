@@ -10,7 +10,7 @@ dependencies:
     - rm ~/.gitconfig
     - wget https://github.com/google/protobuf/releases/download/v3.0.0/protoc-3.0.0-linux-x86_64.zip
     - unzip protoc-3.0.0-linux-x86_64.zip
-    - sudo mv /home/ubuntu/bin/protoc /usr/local/bin/protoc
+    - sudo mv bin/protoc /usr/local/bin/protoc
     - curl https://sh.rustup.rs -sSf | sh /dev/stdin -y
     - sudo apt-get install libncursesw5-dev
 test:
