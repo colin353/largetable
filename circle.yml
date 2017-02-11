@@ -1,0 +1,10 @@
+dependencies:
+  override:
+    # It's necessary to delete this file, because it rewrites a bunch
+    # of URLs that Cargo tries to access, and messes everything up.
+    - rm ~/.gitconfig
+    - curl https://sh.rustup.rs -sSf | sh
+test:
+  override:
+    - cargo test --bin largetable-cli
+    - cargo test --bin largetable
