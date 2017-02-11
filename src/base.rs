@@ -28,7 +28,8 @@ use generated::dtable::*;
 
 #[derive(Debug)]
 pub enum BaseError {
-    CorruptedFiles
+    CorruptedFiles,
+    Problem{reason: String}
 }
 
 pub struct Base {
@@ -63,15 +64,13 @@ impl Base {
     pub fn new_stub() -> Base {
         // First, delete the /tmp/largetable directory and it's
         // contents. Then recreate the directory.
-        std::fs::remove_dir_all("/tmp/largetable").unwrap_or(());
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        std::fs::create_dir_all("/tmp/largetable").unwrap_or(());
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        let directory = format!("/tmp/largetable/largetable-{}", time::precise_time_ns());
+        std::fs::create_dir_all(&directory).unwrap_or(());
 
-        let log = std::fs::File::create("/tmp/largetable/commit.log").unwrap();
+        let log = std::fs::File::create(format!("{}/commit.log", directory)).unwrap();
 
         Base{
-            directory: String::from("/tmp/largetable"),
+            directory: String::from(directory),
             disktable_index: 0,
             memtable: mtable::MTable::new(),
             disktables: vec![],
@@ -164,40 +163,36 @@ impl Base {
     pub fn empty_memtable(&mut self) -> Result<(), BaseError> {
         self.disktable_index += 1;
 
-        // This block clarifies scope for the file references.
-        {
-            println!("Creating dtable file.");
-            let mut f = std::fs::File::create(
-                format!("{}/{}.dtable", self.directory, self.disktable_index)
-            ).map_err(|_| BaseError::CorruptedFiles)?;
+        println!("Creating dtable header.");
+        let mut h = std::fs::File::create(
+            format!("{}/{}.dtable.header", self.directory, self.disktable_index)
+        ).map_err(|e| BaseError::Problem{
+            reason: format!("Unable to create file: {}", e)
+        })?;
 
-            println!("Creating dtable header.");
-            let mut h = std::fs::File::create(
-                format!("{}/{}.dtable.header", self.directory, self.disktable_index)
-            ).map_err(|_| BaseError::CorruptedFiles)?;
+        println!("Creating dtable file.");
+        let mut f = std::fs::File::create(
+            format!("{}/{}.dtable", self.directory, self.disktable_index)
+        ).map_err(|_| BaseError::CorruptedFiles)?;
 
-            println!("Writing memtable to disk.");
-            self.memtable.write_to_writer(&mut f, &mut h).map_err(|_| BaseError::CorruptedFiles)?;
+        println!("Writing memtable to disk.");
+        let dheader = self.memtable.write_to_writer(&mut f, &mut h)
+            .map_err(|_| BaseError::Problem{
+                reason: String::from("Unable to write DTable to disk.")
+            }
+        )?;
 
-            // Flush all buffers to disk.
-            f.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
-            h.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
-        }
+        // Flush all buffers to disk.
+        f.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
+        h.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
 
         println!("Emptying memtable.");
         mem::replace(&mut self.memtable, mtable::MTable::new());
 
-        println!("Reading fresh dtable.");
-        let h = std::fs::File::open(
-            format!("{}/{}.dtable.header", self.directory, self.disktable_index)
-        ).map_err(|e| {
-            println!("Error: {:?}", e);
-            BaseError::CorruptedFiles
-        })?;
-
-        self.disktables.push(
-            dtable::DTable::new(format!("{}/{}.dtable", self.directory, self.disktable_index), h).map_err(|_| BaseError::CorruptedFiles)?
-        );
+        self.disktables.push(dtable::DTable::from_dtableheader(
+            format!("{}/{}.dtable", self.directory, self.disktable_index),
+            dheader
+        ));
 
         // Delete the commit log, since we are writing it to disk.
         println!("Truncating commit log.");
@@ -430,6 +425,10 @@ mod tests {
         );
         // Flush the memtable to disk.
         database.empty_memtable().unwrap();
+
+        println!("Diagnostic: there are {} dtables.", database.disktables.len());
+        println!("Diagnostic: the zeroth dtable has {} rows.", database.disktables[0].len());
+        println!("Diagnostic: select -> {:?}", database.disktables[0].get_row("timestamp_test"));
 
         // Write an older record to the memtable.
         database.query(

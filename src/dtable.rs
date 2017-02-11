@@ -106,6 +106,17 @@ impl DTable {
         })
     }
 
+    pub fn from_dtableheader(filename: String, header: DTableHeader) -> DTable {
+        DTable{
+            filename: filename,
+            lookup: header
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.lookup.get_entries().len()
+    }
+
     fn get_row_offset(&self, key: &str) -> Option<DataRegion> {
         let entries = self.lookup.get_entries();
         let mut l: i32 = 0;
@@ -167,14 +178,18 @@ impl DTable {
             None    => return Err(TError::NotFound)
         };
 
-        let mut file = self.get_reader()?;
+        let mut file = self.get_reader().map_err(|e| {
+            println!("Unable to open file @ get_row! {}", e);
+            TError::IoError
+        })?;
 
         file.seek(io::SeekFrom::Start(offset.start))?;
 
         return match offset.length {
             Some(n) => protobuf::parse_from_reader::<DRow>(&mut file.take(n)),
             None    => protobuf::parse_from_reader::<DRow>(&mut file)
-        }.map_err(|_| {
+        }.map_err(|e| {
+            println!("Thought I found the record, but couldn't read it: {}", e);
             TError::IoError
         });
     }
