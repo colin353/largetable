@@ -179,10 +179,9 @@ impl MRow {
                     // target timestamp, and then insert at that index.
                     let mut entries = col.mut_entries();
                     let mut insertion_index = 0;
-                    for (index, value) in entries.iter().enumerate() {
-                        if value.get_timestamp() > timestamp {
-                            insertion_index = index;
-                            println!("chose insertion index {}", insertion_index);
+                    for (index, value) in entries.iter().enumerate().rev() {
+                        if value.get_timestamp() <= timestamp {
+                            insertion_index = index + 1;
                             break;
                         }
                     }

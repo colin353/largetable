@@ -56,6 +56,10 @@ impl Base {
         }
     }
 
+    #[cfg(test)]
+    // new_stub creates a database based in the /tmp/largetable directory.
+    // It'll ensure that the directory is cleared out before before initializing
+    // so it has a blank slate.
     pub fn new_stub() -> Base {
         // First, delete the /tmp/largetable directory and it's
         // contents. Then recreate the directory.
@@ -78,9 +82,7 @@ impl Base {
     // Try to load the complete state of the database from the filesystem.
     pub fn load(&mut self) -> Result<(), BaseError> {
         self.load_mtable()?;
-        println!("Loaded mtable");
         self.load_dtables()?;
-
         Ok(())
     }
 
@@ -97,7 +99,6 @@ impl Base {
                 Ok(n)   => n,
                 // If we reach end of file, we'll quit.
                 Err(_) => {
-                    println!("Read {} commit logs.", count);
                     return Ok(())
                 }
             };

@@ -11,7 +11,7 @@ hoping to work out as they arise.
 Things I'd like to do pretty soon:
 
 - [x] Commit log
-- [ ] Actual timestamps used in MUpdates, and use them for serving selects
+- [x] Actual timestamps used in MUpdates, and use them for serving selects
 - [ ] Automatically detecting when MTable is too large
 - [ ] Automatic minor compactions
 - [ ] Automatic major compaction
