@@ -124,6 +124,29 @@ mod tests {
     }
 
     #[test]
+    fn can_display_queryresults() {
+        assert_eq!(
+            format!("{}", super::QueryResult::NotImplemented),
+            "Not implemented."
+        );
+
+        assert_eq!(
+            format!("{}", super::QueryResult::RowAlreadyExists),
+            "Row already exists."
+        );
+
+        assert_eq!(
+            format!("{}", super::QueryResult::InternalError),
+            "Internal error."
+        );
+
+        assert_eq!(
+            format!("{}", super::QueryResult::PartialCommit),
+            "Partial commit (!)"
+        );
+    }
+
+    #[test]
     fn can_print_update() {
         let q = super::Query::new_update(
             "row1",

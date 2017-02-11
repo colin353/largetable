@@ -91,7 +91,6 @@ impl Base {
         let mut commit_log = std::fs::File::open(format!("{}/commit.log", self.directory))
             .map_err(|_| BaseError::CorruptedFiles)?;
 
-        let mut count = 0;
         loop {
             // Try to read an entry from the commit log. First, get the size
             // which is encoded as 4 bytes.
@@ -102,8 +101,6 @@ impl Base {
                     return Ok(())
                 }
             };
-
-            count += 1;
 
             // Next, load the next few bytes into a CommitLogUpdate.
             let mut buf = vec![0; size as usize]; //Vec::<u8>::with_capacity(size as usize);
@@ -183,8 +180,8 @@ impl Base {
             self.memtable.write_to_writer(&mut f, &mut h).map_err(|_| BaseError::CorruptedFiles)?;
 
             // Flush all buffers to disk.
-            f.flush().map_err(|_| BaseError::CorruptedFiles)?;
-            h.flush().map_err(|_| BaseError::CorruptedFiles)?;
+            f.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
+            h.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
         }
 
         println!("Emptying memtable.");
