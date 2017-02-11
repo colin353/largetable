@@ -12,11 +12,11 @@ dependencies:
     - unzip protoc-3.0.0-linux-x86_64.zip
     - sudo mv bin/protoc /usr/local/bin/protoc
     - curl https://sh.rustup.rs -sSf | sh /dev/stdin -y
-    - sudo apt-get install libncursesw5-dev
+    - sudo apt-get install libncursesw5-dev binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
 test:
   override:
     - ~/.cargo/bin/cargo install protobuf
     # Synthesize generated files.
-    - /home/ubuntu/bin/protoc --rust_out src/generated src/protobuf/dtable.proto
+    - protoc --rust_out src/generated src/protobuf/dtable.proto
     - ~/.cargo/bin/cargo test --bin largetable-cli
     - ~/.cargo/bin/cargo test --bin largetable
