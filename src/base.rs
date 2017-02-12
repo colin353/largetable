@@ -11,7 +11,6 @@ use std::iter;
 use std::iter::FromIterator;
 use std::mem;
 use std::io::Read;
-use std::io::Write;
 
 use time;
 use regex;
@@ -262,7 +261,7 @@ impl Base {
         self.commit_log.write_u32::<LittleEndian>(size).map_err(|_| BaseError::CorruptedFiles)?;
 
         c.write_to_writer(&mut self.commit_log).map_err(|_| BaseError::CorruptedFiles)?;
-        self.commit_log.flush().map_err(|_| BaseError::CorruptedFiles)?;
+        self.commit_log.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
         Ok(())
     }
 
@@ -362,6 +361,8 @@ mod tests {
     use std::io;
     use std::fs;
     use std::io::BufRead;
+    use std::mem;
+    use mtable;
 
     #[test]
     fn test_insert() {
@@ -426,10 +427,6 @@ mod tests {
         // Flush the memtable to disk.
         database.empty_memtable().unwrap();
 
-        println!("Diagnostic: there are {} dtables.", database.disktables.len());
-        println!("Diagnostic: the zeroth dtable has {} rows.", database.disktables[0].len());
-        println!("Diagnostic: select -> {:?}", database.disktables[0].get_row("timestamp_test"));
-
         // Write an older record to the memtable.
         database.query(
             query::Query::parse(r#"{"update": {"row": "timestamp_test", "set": {"clock": "memtable", "clock2": "t=100"}}}"#).unwrap(),
@@ -440,6 +437,11 @@ mod tests {
         assert_eq!(
             database.str_query(r#"{"select": {"row": "timestamp_test", "get": ["clock"]}}"#),
             r#"Data: ["dtable"]"#
+        );
+
+        assert_eq!(
+            database.disktables[0].len(),
+            1
         );
 
         // As an extra trick, write older data to the memtable, and then
@@ -473,6 +475,34 @@ mod tests {
                 105
             )),
             r#"Data: ["t=100"]"#
+        );
+    }
+
+    #[test]
+    fn can_write_and_restore_commit_log() {
+        let mut database = super::Base::new_stub();
+
+        // Write some stuff to the memtable and commit log.
+        assert_eq!(
+            database.str_query(r#"{"insert": {"row": "my_test_row","set": {"status": "OK"}}}"#),
+            format!("{}", query::QueryResult::Done)
+        );
+
+        // Kill the memtable.
+        mem::replace(&mut database.memtable, mtable::MTable::new());
+
+        // Now the data shouldn't be available.
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "my_test_row","get": ["status"]}}"#),
+            format!("{}", query::QueryResult::RowNotFound)
+        );
+
+        // Load the memtable back up via the commit log.
+        database.load_mtable().unwrap();
+
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "my_test_row","get": ["status"]}}"#),
+            r#"Data: ["OK"]"#
         );
     }
 

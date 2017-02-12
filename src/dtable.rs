@@ -178,18 +178,14 @@ impl DTable {
             None    => return Err(TError::NotFound)
         };
 
-        let mut file = self.get_reader().map_err(|e| {
-            println!("Unable to open file @ get_row! {}", e);
-            TError::IoError
-        })?;
+        let mut file = self.get_reader()?;
 
         file.seek(io::SeekFrom::Start(offset.start))?;
 
         return match offset.length {
             Some(n) => protobuf::parse_from_reader::<DRow>(&mut file.take(n)),
             None    => protobuf::parse_from_reader::<DRow>(&mut file)
-        }.map_err(|e| {
-            println!("Thought I found the record, but couldn't read it: {}", e);
+        }.map_err(|_| {
             TError::IoError
         });
     }
