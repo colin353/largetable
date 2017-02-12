@@ -365,6 +365,33 @@ mod tests {
     use mtable;
 
     #[test]
+    fn can_save_and_reload_dtables() {
+
+        let directory;
+
+        {
+            let mut database = super::Base::new_stub();
+            directory = database.directory.to_owned();
+            assert_eq!(
+                database.str_query(r#"{"insert": {"row": "dtable_checker","set": {"status": "alright"}}}"#),
+                format!("{}", query::QueryResult::Done)
+            );
+            // Write to disk.
+            database.empty_memtable().unwrap();
+        }
+
+        // Load up the new database using the old directory, and load in the
+        // dtable files from that run.
+        let mut database = super::Base::new(&directory);
+        database.load().unwrap();
+
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "dtable_checker","get": ["status"]}}"#),
+            r#"Data: ["alright"]"#
+        );
+    }
+
+    #[test]
     fn test_insert() {
         let mut database = super::Base::new("./data");
 
