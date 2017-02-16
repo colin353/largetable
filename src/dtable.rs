@@ -6,13 +6,14 @@ use std::fs;
 use std::fmt;
 
 use protobuf;
+use protobuf::Message;
 
 use mtable;
 use generated::dtable::*;
 
 pub struct DTable {
     filename: String,
-    lookup: DTableHeader
+    pub lookup: DTableHeader
 }
 
 #[derive(Debug)]
@@ -117,6 +118,21 @@ impl DTable {
         self.lookup.get_entries().len()
     }
 
+    fn get_offset_from_index(&self, index: usize) -> DataRegion {
+        let entries = self.lookup.get_entries();
+
+        let length = match index + 1 {
+            i if i as usize == entries.len() =>
+                None,
+            i => Some(entries[i as usize].get_offset())
+        };
+
+        return DataRegion{
+            start:  entries[index].get_offset(),
+            length: length
+        };
+    }
+
     fn get_row_offset(&self, key: &str) -> Option<DataRegion> {
         let entries = self.lookup.get_entries();
         let mut l: i32 = 0;
@@ -188,5 +204,92 @@ impl DTable {
         }.map_err(|_| {
             TError::IoError
         });
+    }
+
+    pub fn from_vec(filename: &str, tables: &[DTable]) -> Result<DTable, TError> {
+        let mut f_out = std::fs::File::create(filename)?;
+        let mut files = tables.iter()
+            .map(|t| t.get_reader())
+            .filter(|r| r.is_ok())
+            .map(|f| f.unwrap())
+            .collect::<Vec<_>>();
+
+        // The indices vector tells us how many elements have been removed
+        // from each iterator.
+        let mut indices = vec![0; tables.len()];
+
+        // The offset tracks how many bytes we've written to the dtable.
+        let mut offset = 0;
+
+        // Need to detect if any errors occurred in creating file readers
+        // during the iteration process.
+        if files.len() != tables.len() {
+            return Err(TError::IoError);
+        }
+        
+        let mut iterators = tables.iter()
+            .map(|t| t.lookup.get_entries().iter().peekable())
+            .collect::<Vec<_>>();
+
+        // The output is the DTable that we'll return, which corresponds
+        // to the merged data.
+        let mut output = DTable{
+            filename: filename.to_owned(),
+            lookup: DTableHeader::new()
+        };
+
+        loop {
+            // Here we're going to search the list of provided dtables to find
+            // the next index to write.
+            let (index, next_key) = match iterators.iter_mut()
+                .enumerate()
+                .fold(None, |acc, (i, mut x)| match (acc, x.peek()) {
+                    (Some((j, key)), Some(k)) => {
+                        match k.get_key() < key {
+                            true    => Some((i, k.get_key())),
+                            false   => Some((j, key))
+                        }
+                    },
+                    (Some((j, key)), None) => Some((j, key)),
+                    (None, Some(k)) => Some((i, k.get_key())),
+                    (None, None) => None
+                }) {
+                Some((index, next_key)) => (index, next_key),
+                None => break
+            };
+            // Let's figure out which part of the files to copy into the new record.
+            let region = tables[index].get_offset_from_index(indices[index]);
+
+            // Next: move forward the index that we chose.
+            indices[index] += 1;
+
+            // Now seek the file to the start of the location we wish to copy, and
+            // copy the data from the source dtable to the new dtable.
+            let ref mut origin = files[index];
+            origin.seek(io::SeekFrom::Start(region.start))?;
+            let length = match region.length {
+                    Some(n) => io::copy(&mut origin.take(n), &mut f_out),
+                    None    => io::copy(origin, &mut f_out)
+            }?;
+
+            let mut hentry = DTableHeaderEntry::new();
+            hentry.set_key(next_key.to_owned());
+            hentry.set_offset(offset);
+            offset += length;
+
+            output.lookup.mut_entries().push(hentry);
+
+            iterators[index].next();
+        }
+
+        // Finally, write the headers.
+        let mut header_file = std::fs::File::create(format!("{}.header", filename))?;
+        output.lookup.write_to_writer(&mut header_file).map_err(|_| TError::IoError)?;
+
+        // Flush the writes to disk.
+        header_file.sync_all()?;
+        f_out.sync_all()?;
+
+        return Ok(output);
     }
 }

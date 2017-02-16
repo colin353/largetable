@@ -204,6 +204,23 @@ impl Base {
         Ok(())
     }
 
+    // Merge the disktables into a single disktable.
+    pub fn merge_disktables(&mut self) -> Result<(), BaseError> {
+        self.disktable_index += 1;
+
+        let new_disktables = match dtable::DTable::from_vec(
+            format!("{}/{}.dtable", self.directory, self.disktable_index).as_str(),
+            self.disktables.as_slice()
+        ) {
+            Ok(d)   => vec![d],
+            Err(_)  => return Err(BaseError::CorruptedFiles)
+        };
+
+        mem::replace(&mut self.disktables, new_disktables);
+
+        Ok(())
+    }
+
     // Run a query with timestamp set to now.
     pub fn query_now(&mut self, q: query::Query) -> query::QueryResult {
         self.query(q, time::precise_time_ns())
@@ -363,6 +380,37 @@ mod tests {
     use std::io::BufRead;
     use std::mem;
     use mtable;
+
+    #[test]
+    fn can_merge_disktables() {
+        let mut database = super::Base::new_stub();
+        assert_eq!(
+            database.str_query(r#"{"insert": {"row": "dtable_one","set": {"status": "alright"}}}"#),
+            format!("{}", query::QueryResult::Done)
+        );
+        assert_eq!(
+            database.str_query(r#"{"insert": {"row": "dtable_z","set": {"status": "working"}}}"#),
+            format!("{}", query::QueryResult::Done)
+        );
+        database.empty_memtable().unwrap();
+
+        assert_eq!(
+            database.str_query(r#"{"insert": {"row": "dtable_two","set": {"status": "ok"}}}"#),
+            format!("{}", query::QueryResult::Done)
+        );
+        database.empty_memtable().unwrap();
+
+        database.merge_disktables().unwrap();
+
+        assert_eq!(
+            format!("{:?}", database.disktables[0].lookup.get_entries()
+                .iter()
+                .map(|e| e.get_key())
+                .collect::<Vec<_>>()
+            ),
+            r#"["dtable_one", "dtable_two", "dtable_z"]"#
+        );
+    }
 
     #[test]
     fn can_save_and_reload_dtables() {
