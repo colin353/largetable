@@ -410,13 +410,16 @@ mod tests {
             ),
             r#"["dtable_one", "dtable_two", "dtable_z"]"#
         );
+
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "dtable_two","get":["status"]}}"#),
+            r#"Data: ["ok"]"#
+        );
     }
 
     #[test]
     fn can_save_and_reload_dtables() {
-
         let directory;
-
         {
             let mut database = super::Base::new_stub();
             directory = database.directory.to_owned();

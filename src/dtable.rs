@@ -206,6 +206,10 @@ impl DTable {
         });
     }
 
+    // from_vec takes a list of dtables and merges them into a single
+    // dtable. This is a bit of a complicated function. Essentially, it
+    // runs sequentially through the rows of each dtable and merges them
+    // together in order.
     pub fn from_vec(filename: &str, tables: &[DTable]) -> Result<DTable, TError> {
         let mut f_out = std::fs::File::create(filename)?;
         let mut files = tables.iter()
@@ -226,7 +230,7 @@ impl DTable {
         if files.len() != tables.len() {
             return Err(TError::IoError);
         }
-        
+
         let mut iterators = tables.iter()
             .map(|t| t.lookup.get_entries().iter().peekable())
             .collect::<Vec<_>>();
