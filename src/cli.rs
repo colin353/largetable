@@ -7,6 +7,7 @@ extern crate glob;
 extern crate regex;
 extern crate byteorder;
 extern crate time;
+extern crate rand;
 
 mod query;
 mod mtable;

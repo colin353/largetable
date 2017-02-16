@@ -418,6 +418,29 @@ mod tests {
     }
 
     #[test]
+    fn can_merge_colliding_disktables() {
+        let mut database = super::Base::new_stub();
+        assert_eq!(
+            database.str_query(r#"{"insert": {"row": "test_row","set": {"status": "old_status"}}}"#),
+            format!("{}", query::QueryResult::Done)
+        );
+        database.empty_memtable().unwrap();
+
+        assert_eq!(
+            database.str_query(r#"{"update": {"row": "test_row", "set": {"status": "new_status"}}}"#),
+            format!("{}", query::QueryResult::Done)
+        );
+        database.empty_memtable().unwrap();
+
+        database.merge_disktables().unwrap();
+
+        assert_eq!(
+            database.str_query(r#"{"select": {"row": "test_row", "get":["status"]}}"#),
+            r#"Data: ["new_status"]"#
+        );
+    }
+
+    #[test]
     fn can_save_and_reload_dtables() {
         let directory;
         {

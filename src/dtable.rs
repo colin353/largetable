@@ -50,6 +50,40 @@ impl DColumn {
             }
         }
     }
+
+    // This function merges together a series of DColumns into a single one.
+    pub fn from_vec(cols: &[&DColumn]) -> DColumn {
+        let mut iterators = cols.iter()
+            .map(|c| c.get_entries().iter().peekable())
+            .collect::<Vec<_>>();
+
+        let mut output = vec![];
+
+        loop {
+            let index = match iterators.iter_mut()
+                .enumerate()
+                .fold(None, |acc, (j, mut x)| match (acc, x.peek()) {
+                    (Some((i, timestamp)), Some(e)) => {
+                        match (timestamp, e.get_timestamp()) {
+                            (t, t_new) if t >= t_new => Some((i, timestamp)),
+                            (_, t_new) => Some((j, t_new))
+                        }
+                    },
+                    (Some((i, timestamp)), None) => Some((i, timestamp)),
+                    (None, Some(e)) => Some((j, e.get_timestamp())),
+                    (None, None) => None
+                }) {
+                Some((i, _)) => i,
+                None => break
+            };
+
+            output.push(iterators[index].next().unwrap().clone());
+        }
+
+        let mut d = DColumn::new();
+        d.set_entries(protobuf::RepeatedField::from_vec(output));
+        return d;
+    }
 }
 
 impl DRow {
@@ -75,6 +109,79 @@ impl DRow {
 
     pub fn get_value(&self, key: &str, timestamp: u64) -> Result<DEntry, TError> {
         self.get_column(key)?.get_value(timestamp)
+    }
+
+    // Merge a list of DRows with the same key together into a new DRow
+    // with the same key
+    pub fn from_vec(rows: &[DRow]) -> DRow {
+        let mut iterators = rows.iter()
+            .map(|r| r.get_keys().iter().peekable())
+            .collect::<Vec<_>>();
+
+        let mut indices = vec![0; iterators.len()];
+
+        let mut output_keys = vec![];
+        let mut output_cols = vec![];
+
+        loop {
+            // First step is to figure out the column key to insert into
+            // the new row. It's possible that several DRows will share
+            // the same columns, in which case we'll have to merge those
+            // columns.
+            let (indices_to_merge, key) = match iterators
+                .iter_mut()
+                .enumerate()
+                .fold(None, |acc, (i, mut x)| match (acc, x.peek()) {
+                (Some((mut ix, acc_key)), Some(new_key)) => {
+                    match (new_key, acc_key) {
+                        (new_key, acc_key) if new_key < acc_key  => Some((vec![i], new_key)),
+                        (new_key, acc_key) if new_key == acc_key => {
+                            ix.push(i);
+                            Some((ix, acc_key))
+                        }
+                        _ => Some((ix, acc_key))
+                    }
+                },
+                (Some((ix, key)), None) => Some((ix, key)),
+                (None, Some(k)) => Some((vec![i], k)),
+                (None, None) => None
+            }) {
+                Some((indices_to_merge, key)) => {
+                    (indices_to_merge, key.to_string())
+                },
+                None => break
+            };
+
+            // If there's only one index to merge, then we can directly copy it.
+            if indices_to_merge.len() == 1 {
+                let index = indices_to_merge[0];
+                output_keys.push(key);
+                output_cols.push(rows[index].get_columns()[indices[index]].clone());
+                indices[index] += 1;
+                iterators[index].next();
+            }
+            // In this case, we need to merge a list of columns together and then copy that
+            // column into our output.
+            else {
+                output_keys.push(key.to_string());
+                let col = DColumn::from_vec(
+                    indices_to_merge.iter()
+                        .map(|index| &rows[index.clone()].get_columns()[indices[index.clone()]])
+                        .collect::<Vec<_>>()
+                        .as_slice()
+                );
+
+                for index in indices_to_merge {
+                    indices[index] += 1;
+                }
+                output_cols.push(col);
+            }
+        }
+
+        let mut d = DRow::new();
+        d.set_columns(protobuf::RepeatedField::from_vec(output_cols));
+        d.set_keys(protobuf::RepeatedField::from_vec(output_keys));
+        return d;
     }
 }
 
@@ -245,45 +352,70 @@ impl DTable {
         loop {
             // Here we're going to search the list of provided dtables to find
             // the next index to write.
-            let (index, next_key) = match iterators.iter_mut()
+            let (indices_to_write, next_key) = match iterators.iter_mut()
                 .enumerate()
                 .fold(None, |acc, (i, mut x)| match (acc, x.peek()) {
-                    (Some((j, key)), Some(k)) => {
-                        match k.get_key() < key {
-                            true    => Some((i, k.get_key())),
-                            false   => Some((j, key))
+                    (Some((mut ix, key)), Some(k)) => {
+                        match (k.get_key(), key) {
+                            (new_key, acc_key) if new_key < acc_key  => Some((vec![i], new_key)),
+                            (new_key, acc_key) if new_key == acc_key => {
+                                ix.push(i);
+                                Some((ix, key))
+                            }
+                            _ => Some((ix, key))
                         }
                     },
-                    (Some((j, key)), None) => Some((j, key)),
-                    (None, Some(k)) => Some((i, k.get_key())),
+                    (Some((ix, key)), None) => Some((ix, key)),
+                    (None, Some(k)) => Some((vec![i], k.get_key())),
                     (None, None) => None
                 }) {
-                Some((index, next_key)) => (index, next_key),
+                Some((ix, next_key)) => (ix, next_key),
+
+                // If we reach this statement, it means that all of the DTables
+                // we are reading from are empty, so we're done.
                 None => break
             };
-            // Let's figure out which part of the files to copy into the new record.
-            let region = tables[index].get_offset_from_index(indices[index]);
 
-            // Next: move forward the index that we chose.
-            indices[index] += 1;
+            // There are two possibilities here. One: we have a single key that needs
+            // to be directly copied from the source file to the destination, or two,
+            // we have a number of identical keys which need to be merged, then written.
+            match indices_to_write.len() {
+                0 => panic!("It should not be possible to reach this statement."),
 
-            // Now seek the file to the start of the location we wish to copy, and
-            // copy the data from the source dtable to the new dtable.
-            let ref mut origin = files[index];
-            origin.seek(io::SeekFrom::Start(region.start))?;
-            let length = match region.length {
-                    Some(n) => io::copy(&mut origin.take(n), &mut f_out),
-                    None    => io::copy(origin, &mut f_out)
-            }?;
+                // Okay, there's only one key which is to be written. In that case,
+                // we'll directly copy the data from the source file to the destination.
+                1 => {
+                    let index = indices_to_write[0];
+                    // Let's figure out which part of the files to copy into the new record.
+                    let region = tables[index].get_offset_from_index(indices[index]);
 
-            let mut hentry = DTableHeaderEntry::new();
-            hentry.set_key(next_key.to_owned());
-            hentry.set_offset(offset);
-            offset += length;
+                    // Next: move forward the index that we chose.
+                    indices[index] += 1;
 
-            output.lookup.mut_entries().push(hentry);
+                    // Now seek the file to the start of the location we wish to copy, and
+                    // copy the data from the source dtable to the new dtable.
+                    let ref mut origin = files[index];
+                    origin.seek(io::SeekFrom::Start(region.start))?;
+                    let length = match region.length {
+                            Some(n) => io::copy(&mut origin.take(n), &mut f_out),
+                            None    => io::copy(origin, &mut f_out)
+                    }?;
 
-            iterators[index].next();
+                    let mut hentry = DTableHeaderEntry::new();
+                    hentry.set_key(next_key.to_owned());
+                    hentry.set_offset(offset);
+                    offset += length;
+
+                    output.lookup.mut_entries().push(hentry);
+
+                    iterators[index].next();
+                },
+
+                // Okay, we have multiple rows which need to be merged before being written.
+                _ => {
+                    panic!("Merging rows not yet implemented.")
+                }
+            };
         }
 
         // Finally, write the headers.
@@ -295,5 +427,68 @@ impl DTable {
         f_out.sync_all()?;
 
         return Ok(output);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand;
+    use protobuf;
+    use std;
+
+    #[test]
+    fn can_merge_columns() {
+        let data = vec![230, 210, 40, 30, 22];
+
+        // Generate columns with valid (ordered, but random) timestamps.
+        let cols = (0..10).map(|_| {
+                let mut c = super::DColumn::new();
+                let mut entries = (0..100).map(|_| {
+                        let mut e = super::DEntry::new();
+                        e.set_timestamp(rand::random::<u32>() as u64);
+                        e.set_value(data.clone());
+                        return e;
+                    }).collect::<Vec<_>>();
+                entries.sort_by_key(|e| -(e.get_timestamp() as i64));
+                c.set_entries(protobuf::RepeatedField::from_vec(entries));
+                return c;
+            }).collect::<Vec<_>>();
+
+        // Merge the columns together. It should still be ordered after the
+        // merge, and have exactly 1000 entries.
+        let merged = super::DColumn::from_vec(cols.iter().collect::<Vec<_>>().as_slice());
+
+        let entries = merged.get_entries();
+        assert_eq!(entries.len(), 1000);
+
+        let mut minimum = std::u64::MAX;
+        for e in entries {
+            let t = e.get_timestamp();
+            assert!(t <= minimum, "t({}) > minimum({})", t, minimum);
+            minimum = t;
+        }
+    }
+
+    #[test]
+    fn can_merge_rows() {
+        let rows = (0..20).map(|index| {
+            let mut e = super::DEntry::new();
+            e.set_timestamp(100);
+            e.set_value(vec![]);
+
+            let mut c = super::DColumn::new();
+            c.set_entries(protobuf::RepeatedField::from_vec(vec![e]));
+
+            let mut r = super::DRow::new();
+            r.set_keys(protobuf::RepeatedField::from_vec(vec![format!("hello{}", index%3)]));
+            r.set_columns(protobuf::RepeatedField::from_vec(vec![c]));
+
+            return r;
+        }).collect::<Vec<_>>();
+
+        let new_row = super::DRow::from_vec(rows.as_slice());
+        new_row.get_column("hello0").unwrap();
+        new_row.get_column("hello1").unwrap();
+        new_row.get_column("hello2").unwrap();
     }
 }
