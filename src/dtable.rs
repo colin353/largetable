@@ -65,7 +65,7 @@ impl DColumn {
                 .fold(None, |acc, (j, mut x)| match (acc, x.peek()) {
                     (Some((i, timestamp)), Some(e)) => {
                         match (timestamp, e.get_timestamp()) {
-                            (t, t_new) if t >= t_new => Some((i, timestamp)),
+                            (t, t_new) if t <= t_new => Some((i, timestamp)),
                             (_, t_new) => Some((j, t_new))
                         }
                     },
@@ -166,13 +166,15 @@ impl DRow {
                 output_keys.push(key.to_string());
                 let col = DColumn::from_vec(
                     indices_to_merge.iter()
-                        .map(|index| &rows[index.clone()].get_columns()[indices[index.clone()]])
+                        .map(|index| {
+                            &rows[index.clone()].get_columns()[indices[index.clone()]]
+                        })
                         .collect::<Vec<_>>()
                         .as_slice()
                 );
-
                 for index in indices_to_merge {
                     indices[index] += 1;
+                    iterators[index].next();
                 }
                 output_cols.push(col);
             }
@@ -397,8 +399,8 @@ impl DTable {
                     let ref mut origin = files[index];
                     origin.seek(io::SeekFrom::Start(region.start))?;
                     let length = match region.length {
-                            Some(n) => io::copy(&mut origin.take(n), &mut f_out),
-                            None    => io::copy(origin, &mut f_out)
+                        Some(n) => io::copy(&mut origin.take(n), &mut f_out),
+                        None    => io::copy(origin, &mut f_out)
                     }?;
 
                     let mut hentry = DTableHeaderEntry::new();
@@ -413,7 +415,45 @@ impl DTable {
 
                 // Okay, we have multiple rows which need to be merged before being written.
                 _ => {
-                    panic!("Merging rows not yet implemented.")
+                    let rows = indices_to_write.iter()
+                        .map(|index| {
+                            let ix = index.clone();
+                            let ref mut origin = files[ix];
+                            let region = tables[ix].get_offset_from_index(indices[ix]);
+                            origin.seek(io::SeekFrom::Start(region.start))?;
+
+                            match region.length {
+                                Some(n) => protobuf::parse_from_reader::<DRow>(&mut origin.take(n)),
+                                None    => protobuf::parse_from_reader::<DRow>(origin)
+                            }
+                        })
+                        .filter(|r| r.is_ok())
+                        .map(|r| r.unwrap())
+                        .collect::<Vec<_>>();
+
+                    // If the length of our rows list is shorter than our indices_to_write
+                    // list, then it means we encountered an error parsing one of the rows.
+                    if rows.len() != indices_to_write.len() {
+                        return Err(TError::IoError);
+                    }
+
+                    // Merge together the rows that we got into a single row,
+                    // and write it to the output file.
+                    let row = DRow::from_vec(rows.as_slice());
+                    row.write_to_writer(&mut f_out).map_err(|_| TError::IoError)?;
+
+                    let mut hentry = DTableHeaderEntry::new();
+                    hentry.set_key(next_key.to_owned());
+                    hentry.set_offset(offset);
+                    offset += row.get_cached_size() as u64;
+
+                    output.lookup.mut_entries().push(hentry);
+
+                    // Finally, increment the indices and iterators.
+                    for index in indices_to_write {
+                        indices[index] += 1;
+                        iterators[index].next();
+                    }
                 }
             };
         }
@@ -434,7 +474,6 @@ impl DTable {
 mod tests {
     use rand;
     use protobuf;
-    use std;
 
     #[test]
     fn can_merge_columns() {
@@ -449,7 +488,7 @@ mod tests {
                         e.set_value(data.clone());
                         return e;
                     }).collect::<Vec<_>>();
-                entries.sort_by_key(|e| -(e.get_timestamp() as i64));
+                entries.sort_by_key(|e| (e.get_timestamp() as i64));
                 c.set_entries(protobuf::RepeatedField::from_vec(entries));
                 return c;
             }).collect::<Vec<_>>();
@@ -461,10 +500,10 @@ mod tests {
         let entries = merged.get_entries();
         assert_eq!(entries.len(), 1000);
 
-        let mut minimum = std::u64::MAX;
+        let mut minimum = 0;
         for e in entries {
             let t = e.get_timestamp();
-            assert!(t <= minimum, "t({}) > minimum({})", t, minimum);
+            assert!(t >= minimum, "t({}) < minimum({})", t, minimum);
             minimum = t;
         }
     }
