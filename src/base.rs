@@ -380,6 +380,7 @@ mod tests {
     use std::io::BufRead;
     use std::mem;
     use mtable;
+    use rand::random;
 
     #[test]
     fn can_merge_disktables() {
@@ -415,6 +416,23 @@ mod tests {
             database.str_query(r#"{"select": {"row": "dtable_two","get":["status"]}}"#),
             r#"Data: ["ok"]"#
         );
+    }
+
+    // This function generates 25 random bytes of data to write to the
+    // database.
+    fn random_bytes() -> Vec<u8> {
+        (0..25).map(|_| random::<u8>()).collect::<Vec<_>>()
+    }
+
+    // This function generates a 25 character long ASCII-printable string.
+    fn random_string() -> String {
+        (0..25).map(|_| (0x20u8 + (random::<f32>() * 96.0) as u8) as char).collect()
+    }
+
+    #[test]
+    fn can_multi_merge_disktables() {
+        // In this test, we'll generate a series of DTables with random data in several rows.
+        // The DTables will be merged, and the resulting table will be checked by a series of queries.
     }
 
     #[test]

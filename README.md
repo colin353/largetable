@@ -1,6 +1,6 @@
 ## largetable
 
-[![CircleCI](https://circleci.com/gh/colin353/largetable.svg?style=svg)](https://circleci.com/gh/colin353/largetable)
+[![CircleCI](https://circleci.com/gh/colin353/largetable/tree/master.svg?style=shield)](https://circleci.com/gh/colin353/largetable)
 
 [![codecov](https://codecov.io/gh/colin353/largetable/branch/master/graph/badge.svg)](https://codecov.io/gh/colin353/largetable)
 
