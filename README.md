@@ -21,6 +21,7 @@ Things I'd like to do pretty soon:
 - [ ] Automatic minor compactions
 - [ ] Automatic major compaction
 - [ ] Row and column deletion queries
+- [ ] Garbage collection of old data
 
 Medium term ideas:
 

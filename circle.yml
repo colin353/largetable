@@ -11,6 +11,7 @@ dependencies:
     - rm ~/.gitconfig
     - mkdir -p ~/cache
     - mkdir /tmp/largetable
+    - sudo apt-get install libncursesw5-dev
     - circleci/install_protobuf.sh
     - circleci/install_rust.sh
     - circleci/install_kcov.sh
