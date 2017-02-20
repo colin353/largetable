@@ -14,4 +14,4 @@ if [ ! -f ~/cache/protoc ]; then
   mv bin/protoc ~/cache/protoc
 fi
 
-sudo cp ~/cache/protoc /usr/local/bin/protoc
+sudo cp ~/cache/protoc /usr/bin/protoc

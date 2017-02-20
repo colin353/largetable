@@ -22,6 +22,7 @@ Things I'd like to do pretty soon:
 - [ ] Automatic major compaction
 - [ ] Row and column deletion queries
 - [ ] Garbage collection of old data
+- [ ] Build a server and client binary which interact via HTTP
 
 Medium term ideas:
 
