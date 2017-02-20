@@ -1,4 +1,8 @@
-## LargeTable
+## largetable
+
+[![CircleCI](https://circleci.com/gh/colin353/largetable.svg?style=svg)](https://circleci.com/gh/colin353/largetable)
+
+[![codecov](https://codecov.io/gh/colin353/largetable/branch/master/graph/badge.svg)](https://codecov.io/gh/colin353/largetable)
 
 This is mostly just a project for me to learn Rust. The goal is to create
 a database, loosely modeled after BigTable. It's mostly a 2D key-value store
@@ -17,6 +21,7 @@ Things I'd like to do pretty soon:
 - [ ] Automatically detecting when MTable is too large
 - [ ] Automatic minor compactions
 - [ ] Automatic major compaction
+- [ ] Row and column deletion queries
 
 Medium term ideas:
 

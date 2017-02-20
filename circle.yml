@@ -8,6 +8,7 @@ dependencies:
     # It's necessary to delete this file, because it rewrites a bunch
     # of URLs that Cargo tries to access, and messes everything up.
     - rm ~/.gitconfig
+    - mkdir /tmp/largetable
     - wget https://github.com/google/protobuf/releases/download/v3.0.0/protoc-3.0.0-linux-x86_64.zip
     - unzip protoc-3.0.0-linux-x86_64.zip
     - sudo mv bin/protoc /usr/local/bin/protoc
