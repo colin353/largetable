@@ -11,3 +11,5 @@ cd
 if [ ! -f ~/.cargo/bin/rustc ]; then
   curl https://sh.rustup.rs -sSf | sh /dev/stdin -y
 fi
+
+rustup default stable

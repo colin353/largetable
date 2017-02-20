@@ -14,9 +14,9 @@ dependencies:
     - circleci/install_protobuf.sh
     - circleci/install_rust.sh
     - circleci/install_kcov.sh
+    - cargo install
 test:
   override:
-    - cargo install
     # Synthesize generated files.
     - protoc --rust_out src/generated src/protobuf/dtable.proto
     - ~/.cargo/bin/cargo test --bin largetable-cli
