@@ -14,11 +14,11 @@ dependencies:
     - circleci/install_protobuf.sh
     - circleci/install_rust.sh
     - circleci/install_kcov.sh
+    - cargo install protobuf
+    - protoc --rust_out src/generated src/protobuf/dtable.proto
     - cargo install
 test:
   override:
-    # Synthesize generated files.
-    - protoc --rust_out src/generated src/protobuf/dtable.proto
     - ~/.cargo/bin/cargo test --bin largetable-cli
   post:
     # Upload code coverage statement to codecov.io
