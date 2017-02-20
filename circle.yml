@@ -9,11 +9,10 @@ dependencies:
     # It's necessary to delete this file, because it rewrites a bunch
     # of URLs that Cargo tries to access, and messes everything up.
     - rm ~/.gitconfig
+    - mkdir -p ~/cache
     - mkdir /tmp/largetable
     - circleci/install_protobuf.sh
     - circleci/install_rust.sh
-    # Install components for coverage testing w/ kcov
-    - sudo apt-get install libncursesw5-dev binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
     - circleci/install_kcov.sh
 test:
   override:
