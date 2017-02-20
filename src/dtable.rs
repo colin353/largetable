@@ -201,9 +201,9 @@ impl std::fmt::Display for DRow {
     }
 }
 
-struct DataRegion {
-    start: u64,
-    length: Option<u64>
+pub struct DataRegion {
+    pub start: u64,
+    pub length: Option<u64>
 }
 
 impl DTable {
@@ -227,22 +227,23 @@ impl DTable {
         self.lookup.get_entries().len()
     }
 
-    fn get_offset_from_index(&self, index: usize) -> DataRegion {
+    pub fn get_offset_from_index(&self, index: usize) -> DataRegion {
         let entries = self.lookup.get_entries();
+        let offset = entries[index].get_offset();
 
         let length = match index + 1 {
             i if i as usize == entries.len() =>
                 None,
-            i => Some(entries[i as usize].get_offset())
+            i => Some(entries[i as usize].get_offset() - offset)
         };
 
         return DataRegion{
-            start:  entries[index].get_offset(),
+            start:  offset,
             length: length
         };
     }
 
-    fn get_row_offset(&self, key: &str) -> Option<DataRegion> {
+    pub fn get_row_offset(&self, key: &str) -> Option<DataRegion> {
         let entries = self.lookup.get_entries();
         let mut l: i32 = 0;
         let mut r: i32 = entries.len() as i32 - 1;
@@ -254,7 +255,7 @@ impl DTable {
                     let length = match index + 1 {
                         i if i as usize == entries.len() =>
                             None,
-                        i => Some(entries[i as usize].get_offset())
+                        i => Some(entries[i as usize].get_offset() - e.get_offset())
                     };
                     return Some(DataRegion{
                         start:  e.get_offset(),
@@ -405,7 +406,7 @@ impl DTable {
 
                     let mut hentry = DTableHeaderEntry::new();
                     hentry.set_key(next_key.to_owned());
-                    hentry.set_offset(offset);
+                    hentry.set_offset(offset.to_owned());
                     offset += length;
 
                     output.lookup.mut_entries().push(hentry);

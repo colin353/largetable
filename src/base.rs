@@ -381,6 +381,7 @@ mod tests {
     use std::mem;
     use mtable;
     use rand::random;
+    use std::u64;
 
     #[test]
     fn can_merge_disktables() {
@@ -429,10 +430,101 @@ mod tests {
         (0..25).map(|_| (0x20u8 + (random::<f32>() * 96.0) as u8) as char).collect()
     }
 
+    // This method checks that the two methods on dtables which compute
+    // offsets, get_offset_from_index and get_row_offset, match exactly.
+    #[test]
+    fn row_offset_methods_match() {
+        let mut database = super::Base::new_stub();
+        for _ in 0..10 {
+            database.insert(
+                random_string().as_str(),
+                (0..10)
+                    .map(|_| mtable::MUpdate::new(random_string().as_str(), random_bytes()))
+                    .collect::<Vec<_>>(),
+                random::<u64>()
+            );
+        }
+
+        database.empty_memtable().unwrap();
+
+        let key_list = database.disktables[0].lookup.get_entries()
+            .iter()
+            .map(|e| e.get_key())
+            .collect::<Vec<_>>();
+
+        for (i, k) in key_list.iter().enumerate() {
+            let o1 = database.disktables[0].get_row_offset(k).unwrap();
+            let o2 = database.disktables[0].get_offset_from_index(i);
+
+            assert_eq!(o1.start, o2.start);
+            assert_eq!(o1.length, o2.length);
+            if o1.length.is_some() {
+                assert_eq!(
+                    o1.length,
+                    Some(670),
+                    "Expected struct length to be exactly 670 bytes.
+                    If you changed the struct, this error might be a false positive."
+                );
+            }
+        }
+    }
+
     #[test]
     fn can_multi_merge_disktables() {
-        // In this test, we'll generate a series of DTables with random data in several rows.
-        // The DTables will be merged, and the resulting table will be checked by a series of queries.
+        // In this test, we'll generate a series of DTables with random data
+        // in several rows. The DTables will be merged, and the resulting table
+        // will be checked by a series of queries.
+        let mut database = super::Base::new_stub();
+        let mut max_timestamp = 0;
+        for j in 0..4 {
+            // Write ten rows with random junk data.
+            for i in 0..4 {
+                database.insert(
+                    format!("row{}x{}", j, i).as_str(),
+                    (0..4)
+                        .map(|_| mtable::MUpdate::new(random_string().as_str(), random_bytes()))
+                        .chain(vec![mtable::MUpdate::new("canary", format!("ok:{}", i).into_bytes())])
+                        .collect::<Vec<_>>(),
+                    random::<u64>()
+                );
+            }
+
+            let t = random::<u64>();
+            if t > max_timestamp {
+                max_timestamp = t;
+            }
+
+            // Write one row which will overlap in every dtable.
+            database.update(
+                "zcanary_row",
+                vec![mtable::MUpdate::new("canary", format!("ok:{}", t).into_bytes())],
+                t
+            );
+
+            database.empty_memtable().unwrap();
+        }
+
+        // This will merge all 10 disktables.
+        database.merge_disktables().unwrap();
+
+        println!("{:?}", database.disktables[0].get_row("zcanary_row"));
+        println!("{:?}", database.disktables[0].get_row("row0x0"));
+        println!("{:?}", database.disktables[0].get_row("row0x1"));
+
+        // Now we just need to query to make sure that all of the merged data
+        // follows the expected properties.
+        for i in 0..4 {
+            for j in 0..4 {
+                assert_eq!(
+                    format!("{}", database.query(
+                        query::Query::parse(format!(r#"{{"select": {{"row": "row{}x{}", "get": ["canary"]}}}}"#, i, j).as_str()).unwrap(),
+                        u64::MAX
+                    )),
+                    format!(r#"Data: ["ok:{}"]"#, j),
+                    "expected row{}x{} to contain data: ok:{}", i, j, j
+                );
+            }
+        }
     }
 
     #[test]

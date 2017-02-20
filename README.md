@@ -1,7 +1,6 @@
 ## largetable
 
 [![CircleCI](https://circleci.com/gh/colin353/largetable/tree/master.svg?style=shield)](https://circleci.com/gh/colin353/largetable)
-
 [![codecov](https://codecov.io/gh/colin353/largetable/branch/master/graph/badge.svg)](https://codecov.io/gh/colin353/largetable)
 
 This is mostly just a project for me to learn Rust. The goal is to create
