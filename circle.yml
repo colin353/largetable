@@ -15,7 +15,7 @@ dependencies:
     - circleci/install_protobuf.sh
     - circleci/install_rust.sh
     - circleci/install_kcov.sh
-    - cargo install protobuf
+    - cargo install protobuf || true
     - protoc --rust_out src/generated src/protobuf/dtable.proto
     - cargo install
 test:
