@@ -352,10 +352,7 @@ impl Base {
                                 newest_timestamp = r.get_timestamp();
                                 newest_index = j;
                             },
-                            Some(ref r) => {
-                                println!("Ignored value with timestamp = {}", r.get_timestamp());
-                            },
-                            None => continue
+                            Some(_) | None => continue
                         }
                     }
                     match newest_timestamp {

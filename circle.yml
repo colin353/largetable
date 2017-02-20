@@ -4,26 +4,24 @@ machine:
 dependencies:
   cache_directories:
     - "/home/ubuntu/.cargo"
+    - "/home/ubuntu/cache"
   override:
     # It's necessary to delete this file, because it rewrites a bunch
     # of URLs that Cargo tries to access, and messes everything up.
     - rm ~/.gitconfig
     - mkdir /tmp/largetable
-    - wget https://github.com/google/protobuf/releases/download/v3.0.0/protoc-3.0.0-linux-x86_64.zip
-    - unzip protoc-3.0.0-linux-x86_64.zip
-    - sudo mv bin/protoc /usr/local/bin/protoc
-    - curl https://sh.rustup.rs -sSf | sh /dev/stdin -y
+    - circleci/install_protobuf.sh
+    - circleci/install_rust.sh
     # Install components for coverage testing w/ kcov
     - sudo apt-get install libncursesw5-dev binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
-    - git clone https://github.com/SimonKagstrom/kcov.git
-    - mkdir kcov/build
-    - cd kcov/build; cmake ../; make; sudo make install;
+    - circleci/install_kcov.sh
 test:
   override:
-    - ~/.cargo/bin/cargo install protobuf
+    - cargo install
     # Synthesize generated files.
     - protoc --rust_out src/generated src/protobuf/dtable.proto
     - ~/.cargo/bin/cargo test --bin largetable-cli
+  post:
     # Upload code coverage statement to codecov.io
     - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --include-pattern=largetable --verify "target/cov/$(basename $file)" "$file"; done
     - bash <(curl -s https://codecov.io/bash)

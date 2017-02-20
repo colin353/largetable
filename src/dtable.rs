@@ -520,7 +520,11 @@ mod tests {
             c.set_entries(protobuf::RepeatedField::from_vec(vec![e]));
 
             let mut r = super::DRow::new();
-            r.set_keys(protobuf::RepeatedField::from_vec(vec![format!("hello{}", index%3)]));
+            if index == 0 {
+                r.set_keys(protobuf::RepeatedField::from_vec(vec!["canary_field".to_string()]))
+            } else {
+                r.set_keys(protobuf::RepeatedField::from_vec(vec![format!("hello{}", index%3)]));
+            }
             r.set_columns(protobuf::RepeatedField::from_vec(vec![c]));
 
             return r;
