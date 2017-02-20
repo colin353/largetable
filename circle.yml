@@ -25,5 +25,5 @@ test:
     - protoc --rust_out src/generated src/protobuf/dtable.proto
     - ~/.cargo/bin/cargo test --bin largetable-cli
     # Upload code coverage statement to codecov.io
-    - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --include-pattern=./src --verify "target/cov/$(basename $file)" "$file"; done
+    - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --include-pattern=largetable --verify "target/cov/$(basename $file)" "$file"; done
     - bash <(curl -s https://codecov.io/bash)

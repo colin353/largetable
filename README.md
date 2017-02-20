@@ -16,7 +16,7 @@ Things I'd like to do pretty soon:
 - [x] Commit log
 - [x] Actual timestamps used in MUpdates, and use them for serving selects
 - [x] Measure code coverage with kcov
-- [ ] Merging multiple DTables together into a single table
+- [x] Merging multiple DTables together into a single table
 - [ ] Automatically detecting when MTable is too large
 - [ ] Automatic minor compactions
 - [ ] Automatic major compaction
