@@ -136,7 +136,7 @@ impl Base {
 
             // First, let's check for a number in the filename. That'll let us know
             // what index future dtables should be at.
-            let mat = file_scanner.captures(&data).ok_or(BaseError::CorruptedFiles)?;
+            let mat = file_scanner.captures(data).ok_or(BaseError::CorruptedFiles)?;
             let index = mat.get(1).unwrap().as_str().parse::<u32>().map_err(|_| BaseError::CorruptedFiles)?;
             if index > self.disktable_index {
                 self.disktable_index = index;
@@ -270,7 +270,7 @@ impl Base {
                     let mut cu = CommitLogUpdate::new();
                     cu.set_column(u.key.to_owned());
                     cu.set_value(u.value.to_owned());
-                    return cu;
+                    cu
                 })
         ));
 
@@ -330,7 +330,7 @@ impl Base {
         // Now, merge the results with those in the dtables.
         let dresults = self.disktables
             .iter()
-            .map((|d| d.select(row, cols, timestamp)));
+            .map(|d| d.select(row, cols, timestamp));
 
         // Eliminate any misses, and collect up rows to merge.
         let results = mresult

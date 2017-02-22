@@ -25,7 +25,7 @@ pub enum TError {
 
 impl std::convert::From<std::io::Error> for TError {
     fn from(_: std::io::Error) -> Self {
-        return TError::IoError;
+        TError::IoError
     }
 }
 
@@ -82,7 +82,7 @@ impl DColumn {
 
         let mut d = DColumn::new();
         d.set_entries(protobuf::RepeatedField::from_vec(output));
-        return d;
+        d
     }
 }
 
@@ -100,7 +100,7 @@ impl DRow {
                 _             => r = index - 1
             }
         }
-        return Err(TError::NotFound);
+        Err(TError::NotFound)
     }
 
     pub fn get_latest_value(&self, key: &str) -> Result<DEntry, TError> {
@@ -167,7 +167,7 @@ impl DRow {
                 let col = DColumn::from_vec(
                     indices_to_merge.iter()
                         .map(|index| {
-                            &rows[index.clone()].get_columns()[indices[index.clone()]]
+                            &rows[*index].get_columns()[indices[*index]]
                         })
                         .collect::<Vec<_>>()
                         .as_slice()
@@ -183,7 +183,7 @@ impl DRow {
         let mut d = DRow::new();
         d.set_columns(protobuf::RepeatedField::from_vec(output_cols));
         d.set_keys(protobuf::RepeatedField::from_vec(output_keys));
-        return d;
+        d
     }
 }
 
@@ -237,10 +237,10 @@ impl DTable {
             i => Some(entries[i as usize].get_offset() - offset)
         };
 
-        return DataRegion{
+        DataRegion{
             start:  offset,
             length: length
-        };
+        }
     }
 
     pub fn get_row_offset(&self, key: &str) -> Option<DataRegion> {
@@ -266,7 +266,7 @@ impl DTable {
                 _                       => r = index - 1
             }
         }
-        return None;
+        None
     }
 
     fn get_reader(&self) -> Result<std::fs::File, io::Error> {
@@ -290,12 +290,12 @@ impl DTable {
             Err(_)  => return None
         };
 
-        return Some(cols.iter().map(|col| {
+        Some(cols.iter().map(|col| {
             match row.get_value(col, timestamp) {
                 Ok(v)   => Some(v),
                 Err(_)  => None
             }
-        }).collect::<Vec<_>>());
+        }).collect::<Vec<_>>())
     }
 
     pub fn get_row(&self, key: &str) -> Result<DRow, TError> {
@@ -308,12 +308,12 @@ impl DTable {
 
         file.seek(io::SeekFrom::Start(offset.start))?;
 
-        return match offset.length {
+        match offset.length {
             Some(n) => protobuf::parse_from_reader::<DRow>(&mut file.take(n)),
             None    => protobuf::parse_from_reader::<DRow>(&mut file)
         }.map_err(|_| {
             TError::IoError
-        });
+        })
     }
 
     // from_vec takes a list of dtables and merges them into a single
@@ -322,7 +322,7 @@ impl DTable {
     // together in order.
     pub fn from_vec(filename: &str, tables: &[DTable]) -> Result<DTable, TError> {
         let mut f_out = std::fs::File::create(filename)?;
-        let mut files = tables.iter()
+        let files = tables.iter()
             .map(|t| t.get_reader())
             .filter(|r| r.is_ok())
             .map(|f| f.unwrap())
@@ -352,33 +352,25 @@ impl DTable {
             lookup: DTableHeader::new()
         };
 
-        loop {
-            // Here we're going to search the list of provided dtables to find
-            // the next index to write.
-            let (indices_to_write, next_key) = match iterators.iter_mut()
-                .enumerate()
-                .fold(None, |acc, (i, mut x)| match (acc, x.peek()) {
-                    (Some((mut ix, key)), Some(k)) => {
-                        match (k.get_key(), key) {
-                            (new_key, acc_key) if new_key < acc_key  => Some((vec![i], new_key)),
-                            (new_key, acc_key) if new_key == acc_key => {
-                                ix.push(i);
-                                Some((ix, key))
-                            }
-                            _ => Some((ix, key))
+        // Here we're going to search the list of provided dtables to find
+        // the next index to write.
+        while let Some((indices_to_write, next_key)) = iterators.iter_mut()
+            .enumerate()
+            .fold(None, |acc, (i, mut x)| match (acc, x.peek()) {
+                (Some((mut ix, key)), Some(k)) => {
+                    match (k.get_key(), key) {
+                        (new_key, acc_key) if new_key < acc_key  => Some((vec![i], new_key)),
+                        (new_key, acc_key) if new_key == acc_key => {
+                            ix.push(i);
+                            Some((ix, key))
                         }
-                    },
-                    (Some((ix, key)), None) => Some((ix, key)),
-                    (None, Some(k)) => Some((vec![i], k.get_key())),
-                    (None, None) => None
-                }) {
-                Some((ix, next_key)) => (ix, next_key),
-
-                // If we reach this statement, it means that all of the DTables
-                // we are reading from are empty, so we're done.
-                None => break
-            };
-
+                        _ => Some((ix, key))
+                    }
+                },
+                (Some((ix, key)), None) => Some((ix, key)),
+                (None, Some(k)) => Some((vec![i], k.get_key())),
+                (None, None) => None
+            }) {
             // There are two possibilities here. One: we have a single key that needs
             // to be directly copied from the source file to the destination, or two,
             // we have a number of identical keys which need to be merged, then written.
@@ -397,11 +389,11 @@ impl DTable {
 
                     // Now seek the file to the start of the location we wish to copy, and
                     // copy the data from the source dtable to the new dtable.
-                    let ref mut origin = files[index];
+                    let mut origin = &files[index];
                     origin.seek(io::SeekFrom::Start(region.start))?;
                     let length = match region.length {
                         Some(n) => io::copy(&mut origin.take(n), &mut f_out),
-                        None    => io::copy(origin, &mut f_out)
+                        None    => io::copy(&mut origin, &mut f_out)
                     }?;
 
                     let mut hentry = DTableHeaderEntry::new();
@@ -418,14 +410,14 @@ impl DTable {
                 _ => {
                     let rows = indices_to_write.iter()
                         .map(|index| {
-                            let ix = index.clone();
-                            let ref mut origin = files[ix];
+                            let ix = *index;
+                            let mut origin = &files[ix];
                             let region = tables[ix].get_offset_from_index(indices[ix]);
                             origin.seek(io::SeekFrom::Start(region.start))?;
 
                             match region.length {
                                 Some(n) => protobuf::parse_from_reader::<DRow>(&mut origin.take(n)),
-                                None    => protobuf::parse_from_reader::<DRow>(origin)
+                                None    => protobuf::parse_from_reader::<DRow>(&mut origin)
                             }
                         })
                         .filter(|r| r.is_ok())
@@ -467,7 +459,7 @@ impl DTable {
         header_file.sync_all()?;
         f_out.sync_all()?;
 
-        return Ok(output);
+        Ok(output)
     }
 }
 

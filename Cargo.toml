@@ -14,6 +14,10 @@ regex = "0.2"
 byteorder = "1"
 time = "0.1"
 rand = "0.3"
+clippy = {version = "*", optional = true}
+
+[features]
+default = []
 
 [dependencies.nickel]
 version = "*"

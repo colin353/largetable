@@ -60,7 +60,7 @@ impl MRow {
 
         drow.write_to_writer(w)?;
 
-        return Ok(drow.get_cached_size() as u64);
+        Ok(drow.get_cached_size() as u64)
     }
 }
 
@@ -80,7 +80,7 @@ impl fmt::Display for MRow {
 
 impl MTable {
     pub fn new() -> MTable {
-        return MTable{rows: BTreeMap::new()};
+        MTable{rows: BTreeMap::new()}
     }
 
     pub fn update(&mut self, row: &str, updates: &[MUpdate], timestamp: u64) -> Result<(), dtable::TError>{
@@ -116,7 +116,7 @@ impl MTable {
         };
         self.rows.insert(row.to_string(), r);
 
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(test)]
@@ -167,7 +167,7 @@ impl MTable {
 
         table_header.write_to_writer(header)?;
 
-        return Ok(table_header);
+        Ok(table_header)
     }
 }
 

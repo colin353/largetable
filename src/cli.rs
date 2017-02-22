@@ -1,3 +1,5 @@
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -44,7 +46,7 @@ fn main() {
                 }
             }
             x => {
-                match query::Query::parse(&x) {
+                match query::Query::parse(x) {
                     Ok(query)   => {
                         println!("{}", database.query_now(query))
                     }
