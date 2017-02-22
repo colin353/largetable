@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+enum QueryType {
+  SELECT = 0;
+  UPDATE = 1;
+  INSERT = 2;
+}
+
+message Query {
+  QueryType type = 1;
+  string row = 2;
+  repeated string columns = 3;
+  map<string, bytes> values = 4;
+}

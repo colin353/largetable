@@ -13,6 +13,8 @@ hoping to work out as they arise.
 
 Things I'd like to do pretty soon:
 
+- [ ] Build a server and client binary which interact via HTTP
+- [ ] Row and column deletion queries
 - [x] Commit log
 - [x] Actual timestamps used in MUpdates, and use them for serving selects
 - [x] Measure code coverage with kcov
@@ -20,9 +22,7 @@ Things I'd like to do pretty soon:
 - [ ] Automatically detecting when MTable is too large
 - [ ] Automatic minor compactions
 - [ ] Automatic major compaction
-- [ ] Row and column deletion queries
 - [ ] Garbage collection of old data
-- [ ] Build a server and client binary which interact via HTTP
 
 Medium term ideas:
 

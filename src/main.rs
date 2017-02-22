@@ -5,27 +5,27 @@ mod query;
 extern crate protobuf;
 
 #[macro_use]
-extern crate nickel;
-
-use nickel::{Nickel, HttpRouter, Request, Response, MiddlewareResult};
-
-#[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 
+extern crate hyper;
+use hyper::server::{Server, Request, Response};
+use hyper::status::StatusCode;
+
+use std::io;
+use std::io::Write;
+
 mod generated;
 
-// Read a query request in JSON format.
-fn handle_json_query<'mw>(req: &mut Request, res: Response<'mw>) -> MiddlewareResult<'mw> {
-    let query: Result<query::Query, serde_json::Error> = serde_json::from_reader(&mut req.origin);
-    match query {
-        Ok(q)   => res.send(format!("{}", &q)),
-        Err(_)  => res.send("Parsing error.")
+fn hello(mut req: Request, mut res: Response) {
+    match req.method {
+        hyper::Get => {
+            res.start().unwrap().write("hello, world".as_bytes());
+        },
+        _ => *res.status_mut() = StatusCode::MethodNotAllowed
     }
 }
 
 fn main() {
-    let mut server = Nickel::new();
-    server.post("/json", handle_json_query);
-    server.listen("127.0.0.1:6767").unwrap();
+    Server::http("0.0.0.0:8080").unwrap().handle(hello).unwrap();
 }
