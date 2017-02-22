@@ -23,5 +23,6 @@ test:
     - ~/.cargo/bin/cargo test --bin largetable-cli
   post:
     # Upload code coverage statement to codecov.io
+    - rm ./target/debug/largetable*.d
     - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --include-pattern=largetable --verify "target/cov/$(basename $file)" "$file"; done
     - bash <(curl -s https://codecov.io/bash)
