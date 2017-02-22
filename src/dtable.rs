@@ -59,24 +59,19 @@ impl DColumn {
 
         let mut output = vec![];
 
-        loop {
-            let index = match iterators.iter_mut()
-                .enumerate()
-                .fold(None, |acc, (j, mut x)| match (acc, x.peek()) {
-                    (Some((i, timestamp)), Some(e)) => {
-                        match (timestamp, e.get_timestamp()) {
-                            (t, t_new) if t <= t_new => Some((i, timestamp)),
-                            (_, t_new) => Some((j, t_new))
-                        }
-                    },
-                    (Some((i, timestamp)), None) => Some((i, timestamp)),
-                    (None, Some(e)) => Some((j, e.get_timestamp())),
-                    (None, None) => None
-                }) {
-                Some((i, _)) => i,
-                None => break
-            };
-
+        while let Some((index, _)) = iterators.iter_mut()
+            .enumerate()
+            .fold(None, |acc, (j, mut x)| match (acc, x.peek()) {
+                (Some((i, timestamp)), Some(e)) => {
+                    match (timestamp, e.get_timestamp()) {
+                        (t, t_new) if t <= t_new => Some((i, timestamp)),
+                        (_, t_new) => Some((j, t_new))
+                    }
+                },
+                (Some((i, timestamp)), None) => Some((i, timestamp)),
+                (None, Some(e)) => Some((j, e.get_timestamp())),
+                (None, None) => None
+            }) {
             output.push(iterators[index].next().unwrap().clone());
         }
 
@@ -124,61 +119,61 @@ impl DRow {
         let mut output_cols = vec![];
 
         loop {
-            // First step is to figure out the column key to insert into
-            // the new row. It's possible that several DRows will share
-            // the same columns, in which case we'll have to merge those
-            // columns.
-            let (indices_to_merge, key) = match iterators
-                .iter_mut()
-                .enumerate()
-                .fold(None, |acc, (i, mut x)| match (acc, x.peek()) {
-                (Some((mut ix, acc_key)), Some(new_key)) => {
-                    match (new_key, acc_key) {
-                        (new_key, acc_key) if new_key < acc_key  => Some((vec![i], new_key)),
-                        (new_key, acc_key) if new_key == acc_key => {
-                            ix.push(i);
-                            Some((ix, acc_key))
-                        }
-                        _ => Some((ix, acc_key))
-                    }
-                },
-                (Some((ix, key)), None) => Some((ix, key)),
-                (None, Some(k)) => Some((vec![i], k)),
-                (None, None) => None
-            }) {
-                Some((indices_to_merge, key)) => {
-                    (indices_to_merge, key.to_string())
-                },
-                None => break
-            };
+           // First step is to figure out the column key to insert into
+           // the new row. It's possible that several DRows will share
+           // the same columns, in which case we'll have to merge those
+           // columns.
+           let (indices_to_merge, key) = match iterators
+               .iter_mut()
+               .enumerate()
+               .fold(None, |acc, (i, mut x)| match (acc, x.peek()) {
+               (Some((mut ix, acc_key)), Some(new_key)) => {
+                   match (new_key, acc_key) {
+                       (new_key, acc_key) if new_key < acc_key  => Some((vec![i], new_key)),
+                       (new_key, acc_key) if new_key == acc_key => {
+                           ix.push(i);
+                           Some((ix, acc_key))
+                       }
+                       _ => Some((ix, acc_key))
+                   }
+               },
+               (Some((ix, key)), None) => Some((ix, key)),
+               (None, Some(k)) => Some((vec![i], k)),
+               (None, None) => None
+           }) {
+               Some((indices_to_merge, key)) => {
+                   (indices_to_merge, key.to_string())
+               },
+               None => break
+           };
 
-            // If there's only one index to merge, then we can directly copy it.
-            if indices_to_merge.len() == 1 {
-                let index = indices_to_merge[0];
-                output_keys.push(key);
-                output_cols.push(rows[index].get_columns()[indices[index]].clone());
-                indices[index] += 1;
-                iterators[index].next();
-            }
-            // In this case, we need to merge a list of columns together and then copy that
-            // column into our output.
-            else {
-                output_keys.push(key.to_string());
-                let col = DColumn::from_vec(
-                    indices_to_merge.iter()
-                        .map(|index| {
-                            &rows[*index].get_columns()[indices[*index]]
-                        })
-                        .collect::<Vec<_>>()
-                        .as_slice()
-                );
-                for index in indices_to_merge {
-                    indices[index] += 1;
-                    iterators[index].next();
-                }
-                output_cols.push(col);
-            }
-        }
+           // If there's only one index to merge, then we can directly copy it.
+           if indices_to_merge.len() == 1 {
+               let index = indices_to_merge[0];
+               output_keys.push(key);
+               output_cols.push(rows[index].get_columns()[indices[index]].clone());
+               indices[index] += 1;
+               iterators[index].next();
+           }
+           // In this case, we need to merge a list of columns together and then copy that
+           // column into our output.
+           else {
+               output_keys.push(key.to_string());
+               let col = DColumn::from_vec(
+                   indices_to_merge.iter()
+                       .map(|index| {
+                           &rows[*index].get_columns()[indices[*index]]
+                       })
+                       .collect::<Vec<_>>()
+                       .as_slice()
+               );
+               for index in indices_to_merge {
+                   indices[index] += 1;
+                   iterators[index].next();
+               }
+               output_cols.push(col);
+           }
+       }
 
         let mut d = DRow::new();
         d.set_columns(protobuf::RepeatedField::from_vec(output_cols));

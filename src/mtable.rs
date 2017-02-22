@@ -139,7 +139,7 @@ impl MTable {
         };
 
         Some(cols.iter()
-                 .map(|column| match r.columns.get(column.clone()) {
+                 .map(|column| match r.columns.get(*column) {
                     Some(c) => c.get_value(timestamp).ok(),
                     None => None
             }).collect::<Vec<_>>()
@@ -174,28 +174,25 @@ impl MTable {
 impl MRow {
     fn update(&mut self, updates: &[MUpdate], timestamp: u64) {
         for update in updates {
-            match self.columns.get_mut(&*update.key) {
-                Some(col) => {
-                    let mut e = DEntry::new();
-                    e.set_timestamp(timestamp);
-                    e.set_value(update.value.clone());
+            if let Some(col) = self.columns.get_mut(&*update.key) {
+                let mut e = DEntry::new();
+                e.set_timestamp(timestamp);
+                e.set_value(update.value.clone());
 
-                    // We need to make sure we are inserting it at the
-                    // correct point. We'll start from the end of the array
-                    // and search backward until we see a number less than our
-                    // target timestamp, and then insert at that index.
-                    let mut entries = col.mut_entries();
-                    let mut insertion_index = 0;
-                    for (index, value) in entries.iter().enumerate().rev() {
-                        if value.get_timestamp() <= timestamp {
-                            insertion_index = index + 1;
-                            break;
-                        }
+                // We need to make sure we are inserting it at the
+                // correct point. We'll start from the end of the array
+                // and search backward until we see a number less than our
+                // target timestamp, and then insert at that index.
+                let mut entries = col.mut_entries();
+                let mut insertion_index = 0;
+                for (index, value) in entries.iter().enumerate().rev() {
+                    if value.get_timestamp() <= timestamp {
+                        insertion_index = index + 1;
+                        break;
                     }
-                    entries.insert(insertion_index, e);
-                    continue;
-                },
-                None => ()
+                }
+                entries.insert(insertion_index, e);
+                continue;
             }
 
             let mut e = DEntry::new();
