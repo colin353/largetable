@@ -6,11 +6,15 @@
 */
 
 use std::fmt;
-use std::collections::BTreeMap as Map;
+use std::io;
+use std::collections::HashMap as Map;
 
 use serde_json;
+use protobuf;
+use protobuf::Message;
 
 use mtable;
+use generated;
 
 #[derive(Debug)]
 pub enum QError {
@@ -22,9 +26,9 @@ pub enum Query {
     #[serde(rename = "select")]
     Select { row: String, get: Vec<String> },
     #[serde(rename = "update")]
-    Update { row: String, set: Map<String, String> },
+    Update { row: String, set: Map<String, Vec<u8>> },
     #[serde(rename = "insert")]
-    Insert { row: String, set: Map<String, String> },
+    Insert { row: String, set: Map<String, Vec<u8>> },
 }
 
 #[derive(Serialize, Debug)]
@@ -49,15 +53,50 @@ impl Query {
     pub fn new_update(row: &str, set: Vec<mtable::MUpdate>) -> Query {
         Query::Update{
             row: row.to_string(),
-            set: set.into_iter().map(|u| (u.key, String::from_utf8(u.value).unwrap())).collect()
+            set: set.into_iter().map(|u| (u.key, u.value)).collect()
         }
     }
 
     pub fn new_insert(row: &str, set: Vec<mtable::MUpdate>) -> Query {
         Query::Insert{
             row: row.to_string(),
-            set: set.into_iter().map(|u| (u.key, String::from_utf8(u.value).unwrap())).collect()
+            set: set.into_iter().map(|u| (u.key, u.value)).collect()
         }
+    }
+
+    // Create a query from a protobuf query.
+    pub fn from_bytes(mut reader: &mut io::Read) -> Result<Query, QError> {
+        let mut q = protobuf::parse_from_reader::<generated::query::Query>(&mut reader).map_err(|_| QError::ParseError)?;
+        match q.get_field_type() {
+            generated::query::QueryType::SELECT => Ok(Query::Select{
+                row: q.take_row(),
+                get: q.take_columns().into_vec()
+            }),
+            _ => Err(QError::ParseError)
+        }
+    }
+
+    // Turn the query into a protobuf, and then write it to a writer.
+    pub fn write_to_writer(self, mut writer: &mut io::Write) -> Result<(), QError> {
+        let mut q = generated::query::Query::new();
+        match self {
+            Query::Select{row: r, get: g} => {
+                q.set_field_type(generated::query::QueryType::SELECT);
+                q.set_row(r);
+                q.set_columns(protobuf::RepeatedField::from_vec(g))
+            },
+            Query::Insert{row: r, set: s} => {
+                q.set_field_type(generated::query::QueryType::INSERT);
+                q.set_row(r);
+                q.set_values(s);
+            },
+            Query::Update{row: r, set: s} => {
+                q.set_field_type(generated::query::QueryType::UPDATE);
+                q.set_row(r);
+                q.set_values(s);
+            }
+        };
+        q.write_to_writer(writer).map_err(|_| QError::ParseError)
     }
 
     // This function parses an arbitrary string and returns

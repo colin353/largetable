@@ -7,12 +7,13 @@ extern crate protobuf;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate rand;
+extern crate time;
 
 extern crate hyper;
 use hyper::server::{Server, Request, Response};
 use hyper::status::StatusCode;
 
-use std::io;
 use std::io::Write;
 
 mod generated;
@@ -20,7 +21,10 @@ mod generated;
 fn hello(mut req: Request, mut res: Response) {
     match req.method {
         hyper::Get => {
-            res.start().unwrap().write("hello, world".as_bytes());
+            match query::Query::from_bytes(&mut req) {
+                Ok(q)   => res.start().unwrap().write(format!("{}", q).as_bytes()),
+                Err(_)  => res.start().unwrap().write("invalid data".as_bytes()),
+            }.unwrap();
         },
         _ => *res.status_mut() = StatusCode::MethodNotAllowed
     }
