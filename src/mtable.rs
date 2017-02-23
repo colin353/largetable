@@ -16,23 +16,9 @@ use protobuf::Message;
 
 use generated::dtable::*;
 use dtable;
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MUpdate {
-    pub value: Vec<u8>,
-    pub key: String
-}
+use query::MUpdate;
 
 pub type TOption = Option<Vec<Option<DEntry>>>;
-
-impl MUpdate {
-    pub fn new(key: &str, value: Vec<u8>) -> MUpdate {
-        MUpdate{
-            key: key.to_string(),
-            value: value
-        }
-    }
-}
 
 pub struct MRow {
     columns: BTreeMap<String, DColumn>

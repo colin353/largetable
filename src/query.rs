@@ -8,12 +8,12 @@
 use std::fmt;
 use std::io;
 use std::collections::HashMap as Map;
+use std::iter::FromIterator;
 
 use serde_json;
 use protobuf;
 use protobuf::Message;
 
-use mtable;
 use generated;
 
 #[derive(Debug)]
@@ -22,12 +22,52 @@ pub enum QError {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Query {
+pub struct MUpdate {
+    pub value: Vec<u8>,
+    pub key: String
+}
+
+impl MUpdate {
+    pub fn new(key: &str, value: Vec<u8>) -> MUpdate {
+        MUpdate{
+            key: key.to_string(),
+            value: value
+        }
+    }
+}
+
+// In order to support JSON parsing of queries, this struct is created
+// which has Strings instead of Vec<u8> in the value of the HashMap.
+// In order to be applied to the database, these QueryStrings must be
+// converted into regular Queries using .into_query().
+#[derive(Serialize, Deserialize, Debug)]
+pub enum QueryString {
     #[serde(rename = "select")]
     Select { row: String, get: Vec<String> },
     #[serde(rename = "update")]
-    Update { row: String, set: Map<String, Vec<u8>> },
+    Update { row: String, set: Map<String, String> },
     #[serde(rename = "insert")]
+    Insert { row: String, set: Map<String, String> },
+}
+
+impl QueryString {
+    fn into_query(self) -> Query {
+        fn convert_map(input: Map<String, String>) -> Map<String, Vec<u8>> {
+            Map::from_iter(
+                input.into_iter().map(|(k, v)| (k, v.into_bytes()))
+            )
+        }
+        match self {
+            QueryString::Select{row: r, get: g} => Query::Select{row: r, get: g},
+            QueryString::Update{row: r, set: s} => Query::Update{row: r, set: convert_map(s)},
+            QueryString::Insert{row: r, set: s} => Query::Insert{row: r, set: convert_map(s)}
+        }
+    }
+}
+
+pub enum Query {
+    Select { row: String, get: Vec<String> },
+    Update { row: String, set: Map<String, Vec<u8>> },
     Insert { row: String, set: Map<String, Vec<u8>> },
 }
 
@@ -39,6 +79,7 @@ pub enum QueryResult {
     InternalError,
     Done,
     PartialCommit,
+    NetworkError,
     Data{ columns: Vec<Option<Vec<u8>>> }
 }
 
@@ -50,14 +91,28 @@ impl Query {
         }
     }
 
-    pub fn new_update(row: &str, set: Vec<mtable::MUpdate>) -> Query {
+    pub fn as_query_string(&self) -> QueryString {
+        fn convert_map(input: &Map<String, Vec<u8>>) -> Map<String, String> {
+            Map::from_iter(
+                input.iter().map(|(k, v)| (k.clone(), String::from_utf8(v.to_vec()).unwrap()))
+            )
+        }
+
+        match *self {
+            Query::Select{row: ref r, get: ref g} => QueryString::Select{row: r.clone(), get: g.clone()},
+            Query::Update{row: ref r, set: ref s} => QueryString::Update{row: r.clone(), set: convert_map(s)},
+            Query::Insert{row: ref r, set: ref s} => QueryString::Insert{row: r.clone(), set: convert_map(s)}
+        }
+    }
+
+    pub fn new_update(row: &str, set: Vec<MUpdate>) -> Query {
         Query::Update{
             row: row.to_string(),
             set: set.into_iter().map(|u| (u.key, u.value)).collect()
         }
     }
 
-    pub fn new_insert(row: &str, set: Vec<mtable::MUpdate>) -> Query {
+    pub fn new_insert(row: &str, set: Vec<MUpdate>) -> Query {
         Query::Insert{
             row: row.to_string(),
             set: set.into_iter().map(|u| (u.key, u.value)).collect()
@@ -71,6 +126,14 @@ impl Query {
             generated::query::QueryType::SELECT => Ok(Query::Select{
                 row: q.take_row(),
                 get: q.take_columns().into_vec()
+            }),
+            generated::query::QueryType::INSERT => Ok(Query::Insert{
+                row: q.take_row(),
+                set: q.take_values()
+            }),
+            generated::query::QueryType::UPDATE => Ok(Query::Update{
+                row: q.take_row(),
+                set: q.take_values()
             }),
             _ => Err(QError::ParseError)
         }
@@ -102,12 +165,13 @@ impl Query {
     // This function parses an arbitrary string and returns
     // a query or an error.
     pub fn parse(input: &str) -> Result<Query, QError> {
-        serde_json::from_str(input).map_err(|_| QError::ParseError)
+        let qs: QueryString = serde_json::from_str(input).map_err(|_| QError::ParseError)?;
+        Ok(qs.into_query())
     }
 
     // Return the query as a JSON object.
     pub fn as_json(&self) -> Result<String, QError> {
-        serde_json::to_string(&self).map_err(|_| QError::ParseError)
+        serde_json::to_string(&self.as_query_string()).map_err(|_| QError::ParseError)
     }
 }
 
@@ -120,6 +184,30 @@ impl fmt::Display for Query {
     }
 }
 
+impl QueryResult {
+    fn from_generated(q: generated::query::QueryResult) -> QueryResult {
+        QueryResult::Done
+    }
+
+    fn to_generated(self) -> generated::query::QueryResult {
+        let mut output = generated::query::QueryResult::new();
+        match self {
+            QueryResult::Done => output.set_field_type(generated::query::QueryResultType::OK),
+            QueryResult::RowNotFound => output.set_field_type(generated::query::QueryResultType::ROW_NOT_FOUND),
+            QueryResult::RowAlreadyExists => output.set_field_type(generated::query::QueryResultType::ROW_ALREADY_EXISTS),
+            QueryResult::PartialCommit => output.set_field_type(generated::query::QueryResultType::PARTIAL_COMMIT),
+            QueryResult::NotImplemented => output.set_field_type(generated::query::QueryResultType::NOT_IMPLEMENTED),
+            QueryResult::NetworkError => output.set_field_type(generated::query::QueryResultType::NETWORK_ERROR),
+            QueryResult::InternalError => output.set_field_type(generated::query::QueryResultType::INTERNAL_ERROR),
+            QueryResult::Data{columns: c} => {
+                output.set_columns(protobuf::RepeatedField::from_vec(c));
+                output.set_field_type(generated::query::QueryResultType::DATA);
+            }
+        }
+        output
+    }
+}
+
 impl fmt::Display for QueryResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -128,6 +216,7 @@ impl fmt::Display for QueryResult {
             QueryResult::RowAlreadyExists => write!(f, "Row already exists."),
             QueryResult::InternalError    => write!(f, "Internal error."),
             QueryResult::NotImplemented   => write!(f, "Not implemented."),
+            QueryResult::NetworkError     => write!(f, "Network error."),
             QueryResult::PartialCommit    => write!(f, "Partial commit (!)"),
             QueryResult::Data{columns: ref c} => {
                 write!(f, "Data: [{}]", c.iter().map(|s| match *s {
@@ -147,8 +236,6 @@ impl fmt::Display for QueryResult {
 
 #[cfg(test)]
 mod tests {
-    use mtable;
-
     #[test]
     fn can_print_select() {
         let q = super::Query::new_select(
@@ -189,7 +276,7 @@ mod tests {
     fn can_print_update() {
         let q = super::Query::new_update(
             "row1",
-            vec![mtable::MUpdate::new("test", vec![120, 121])]
+            vec![MUpdate::new("test", vec![120, 121])]
         );
 
         assert_eq!(
@@ -202,7 +289,7 @@ mod tests {
     fn can_print_insert() {
         let q = super::Query::new_insert(
             "row1",
-            vec![mtable::MUpdate::new("test", vec![120, 121])]
+            vec![MUpdate::new("test", vec![120, 121])]
         );
 
         assert_eq!(

@@ -112,7 +112,7 @@ impl Base {
                 clu.get_key(),
                 clu.get_updates()
                     .iter()
-                    .map(|u| mtable::MUpdate::new(
+                    .map(|u| query::MUpdate::new(
                         u.get_column(),
                         u.get_value().to_owned()
                     )).collect::<Vec<_>>()
@@ -242,7 +242,7 @@ impl Base {
                 self.insert(
                     &r,
                     s.into_iter().map(|(key, value)|
-                        mtable::MUpdate::new(key.as_str(), value.into_bytes())
+                        query::MUpdate::new(key.as_str(), value)
                     ).collect::<Vec<_>>(),
                     timestamp
                 )
@@ -251,7 +251,7 @@ impl Base {
                 self.update(
                     &r,
                     s.into_iter().map(|(key, value)|
-                        mtable::MUpdate::new(key.as_str(), value.into_bytes())
+                        query::MUpdate::new(key.as_str(), value)
                     ).collect::<Vec<_>>(),
                     timestamp
                 )
@@ -260,7 +260,7 @@ impl Base {
     }
 
     // Publish an insert/update to the commit log.
-    pub fn commit(&mut self, row: &str, updates: &[mtable::MUpdate], timestamp: u64) -> Result<(), BaseError> {
+    pub fn commit(&mut self, row: &str, updates: &[query::MUpdate], timestamp: u64) -> Result<(), BaseError> {
         let mut c = CommitLogEntry::new();
         c.set_key(row.to_owned());
         c.set_timestamp(timestamp);
@@ -282,7 +282,7 @@ impl Base {
         Ok(())
     }
 
-    pub fn insert(&mut self, row: &str, updates: Vec<mtable::MUpdate>, timestamp: u64) -> query::QueryResult {
+    pub fn insert(&mut self, row: &str, updates: Vec<query::MUpdate>, timestamp: u64) -> query::QueryResult {
         match self.memtable.insert(row, &updates, timestamp) {
             Ok(_)   => (),
             Err(dtable::TError::AlreadyExists)  => return query::QueryResult::RowAlreadyExists,
@@ -301,7 +301,7 @@ impl Base {
     }
 
     // This private method does an update without creating a commit log entry.
-    fn direct_update(&mut self, row: &str, updates: &[mtable::MUpdate], timestamp: u64) -> query::QueryResult {
+    fn direct_update(&mut self, row: &str, updates: &[query::MUpdate], timestamp: u64) -> query::QueryResult {
         match self.memtable.update(row, updates, timestamp) {
             Ok(_) => query::QueryResult::Done,
             Err(dtable::TError::NotFound) => query::QueryResult::RowNotFound,
@@ -310,7 +310,7 @@ impl Base {
     }
 
     // This function does a commit-then-update, using the private direct_update method.
-    pub fn update(&mut self, row: &str, updates: Vec<mtable::MUpdate>, timestamp: u64) -> query::QueryResult {
+    pub fn update(&mut self, row: &str, updates: Vec<query::MUpdate>, timestamp: u64) -> query::QueryResult {
         match self.direct_update(row, &updates, timestamp) {
             query::QueryResult::Done => (),
             x   => return x
@@ -436,7 +436,7 @@ mod tests {
             database.insert(
                 random_string().as_str(),
                 (0..10)
-                    .map(|_| mtable::MUpdate::new(random_string().as_str(), random_bytes()))
+                    .map(|_| query::MUpdate::new(random_string().as_str(), random_bytes()))
                     .collect::<Vec<_>>(),
                 random::<u64>()
             );
@@ -479,8 +479,8 @@ mod tests {
                 database.insert(
                     format!("row{}x{}", j, i).as_str(),
                     (0..4)
-                        .map(|_| mtable::MUpdate::new(random_string().as_str(), random_bytes()))
-                        .chain(vec![mtable::MUpdate::new("canary", format!("ok:{}", i).into_bytes())])
+                        .map(|_| query::MUpdate::new(random_string().as_str(), random_bytes()))
+                        .chain(vec![query::MUpdate::new("canary", format!("ok:{}", i).into_bytes())])
                         .collect::<Vec<_>>(),
                     random::<u64>()
                 );
@@ -494,7 +494,7 @@ mod tests {
             // Write one row which will overlap in every dtable.
             database.update(
                 "zcanary_row",
-                vec![mtable::MUpdate::new("canary", format!("ok:{}", t).into_bytes())],
+                vec![query::MUpdate::new("canary", format!("ok:{}", t).into_bytes())],
                 t
             );
 

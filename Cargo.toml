@@ -20,6 +20,10 @@ hyper = "0.10.0"
 [features]
 default = []
 
+[lib]
+name = "largeclient"
+path = "src/client.rs"
+
 [[bin]]
 name = "largetable"
 path = "src/main.rs"

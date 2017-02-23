@@ -15,6 +15,7 @@ Things I'd like to do pretty soon:
 
 - [ ] Build a server and client binary which interact via HTTP
 - [ ] Row and column deletion queries
+- [ ] Generate a timestamped log of activity with configurable verbosity
 - [x] Commit log
 - [x] Actual timestamps used in MUpdates, and use them for serving selects
 - [x] Measure code coverage with kcov
