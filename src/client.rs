@@ -10,42 +10,48 @@ extern crate time;
 extern crate rand;
 extern crate hyper;
 
-use protobuf::Message;
-
-mod query;
+pub mod query;
 mod generated;
 
-struct LargeClient {
+pub struct LargeClient {
     hostname: hyper::Url
 }
 
-enum ClientError {
+#[derive(Debug)]
+pub enum ClientError {
     ConfigurationError
 }
 
 impl LargeClient {
-    fn new(hostname: &str) -> Result<LargeClient, ClientError> {
+    pub fn new(hostname: &str) -> Result<LargeClient, ClientError> {
         Ok(LargeClient{
             hostname: hyper::Url::parse(hostname)
                 .map_err(|_| ClientError::ConfigurationError)?
         })
     }
 
-    fn query(&self, q: query::Query) -> query::QueryResult {
+    pub fn query(&self, q: query::Query) -> query::QueryResult {
         let req = match hyper::client::request::Request::new(
             hyper::method::Method::Post,
             self.hostname.clone()
         ) {
             Ok(r) => r,
-            Err(_) => return query::QueryResult::NetworkError
+            Err(_) => {
+                println!("failed to create request.");
+                return query::QueryResult::NetworkError
+            }
         };
 
         let mut w = match req.start() {
             Ok(writer)  => writer,
-            Err(_)      => return query::QueryResult::NetworkError
+            Err(_)      => {
+                println!("failed to connect to host");
+                return query::QueryResult::NetworkError
+            }
         };
 
         if q.write_to_writer(&mut w).is_err() {
+            println!("failed to write message to host.");
             return query::QueryResult::NetworkError;
         }
 
@@ -55,7 +61,7 @@ impl LargeClient {
         };
 
         match protobuf::parse_from_reader::<generated::query::QueryResult>(&mut read) {
-            Ok(result) => query::QueryResult::Done,
+            Ok(result) => query::QueryResult::from_generated(result),
             Err(_) => query::QueryResult::InternalError
         }
     }

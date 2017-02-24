@@ -20,6 +20,8 @@ use hyper::status::StatusCode;
 use std::io::Write;
 use std::sync::Mutex;
 
+use protobuf::Message;
+
 mod base;
 mod generated;
 
@@ -35,13 +37,13 @@ impl Handler for RequestHandler {
                     Ok(q)   => {
                         println!("query: {}", q);
                         let result = self.database.lock().unwrap().query_now(q);
-                        res.start().unwrap().write(format!("{}", result).as_bytes())
+                        result.into_generated().write_to_writer(&mut res.start().unwrap()).unwrap();
                     },
                     Err(_)  => {
                         println!("query: invalid data");
-                        res.start().unwrap().write("invalid data".as_bytes())
+                        res.start().unwrap().write("invalid data".as_bytes()).unwrap();
                     }
-                }.unwrap();
+                };
             },
             _ => *res.status_mut() = StatusCode::MethodNotAllowed
         }

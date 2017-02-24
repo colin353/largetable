@@ -134,8 +134,7 @@ impl Query {
             generated::query::QueryType::UPDATE => Ok(Query::Update{
                 row: q.take_row(),
                 set: q.take_values()
-            }),
-            _ => Err(QError::ParseError)
+            })
         }
     }
 
@@ -146,7 +145,7 @@ impl Query {
             Query::Select{row: r, get: g} => {
                 q.set_field_type(generated::query::QueryType::SELECT);
                 q.set_row(r);
-                q.set_columns(protobuf::RepeatedField::from_vec(g))
+                q.set_columns(protobuf::RepeatedField::from_vec(g));
             },
             Query::Insert{row: r, set: s} => {
                 q.set_field_type(generated::query::QueryType::INSERT);
@@ -185,22 +184,51 @@ impl fmt::Display for Query {
 }
 
 impl QueryResult {
-    fn from_generated(q: generated::query::QueryResult) -> QueryResult {
-        QueryResult::Done
+    pub fn from_generated(mut q: generated::query::QueryResult) -> QueryResult {
+        let field_type = q.get_field_type();
+        match field_type {
+            generated::query::QueryResultType::OK => QueryResult::Done,
+            generated::query::QueryResultType::ROW_NOT_FOUND => QueryResult::RowNotFound,
+            generated::query::QueryResultType::ROW_ALREADY_EXISTS => QueryResult::RowAlreadyExists,
+            generated::query::QueryResultType::PARTIAL_COMMIT => QueryResult::PartialCommit,
+            generated::query::QueryResultType::INTERNAL_ERROR => QueryResult::InternalError,
+            generated::query::QueryResultType::NOT_IMPLEMENTED => QueryResult::NotImplemented,
+            generated::query::QueryResultType::NETWORK_ERROR => QueryResult::NetworkError,
+            generated::query::QueryResultType::DATA =>
+                QueryResult::Data{
+                    columns: q.take_columns().into_iter()
+                        .map(|mut r| {
+                            match r.get_has_data() {
+                                true => Some(r.take_data()),
+                                false => None
+                            }
+                        }).collect::<Vec<_>>()
+                },
+        }
     }
 
-    fn to_generated(self) -> generated::query::QueryResult {
+    pub fn into_generated(self) -> generated::query::QueryResult {
         let mut output = generated::query::QueryResult::new();
         match self {
-            QueryResult::Done => output.set_field_type(generated::query::QueryResultType::OK),
-            QueryResult::RowNotFound => output.set_field_type(generated::query::QueryResultType::ROW_NOT_FOUND),
-            QueryResult::RowAlreadyExists => output.set_field_type(generated::query::QueryResultType::ROW_ALREADY_EXISTS),
-            QueryResult::PartialCommit => output.set_field_type(generated::query::QueryResultType::PARTIAL_COMMIT),
-            QueryResult::NotImplemented => output.set_field_type(generated::query::QueryResultType::NOT_IMPLEMENTED),
-            QueryResult::NetworkError => output.set_field_type(generated::query::QueryResultType::NETWORK_ERROR),
-            QueryResult::InternalError => output.set_field_type(generated::query::QueryResultType::INTERNAL_ERROR),
-            QueryResult::Data{columns: c} => {
-                output.set_columns(protobuf::RepeatedField::from_vec(c));
+            QueryResult::Done               => output.set_field_type(generated::query::QueryResultType::OK),
+            QueryResult::RowNotFound        => output.set_field_type(generated::query::QueryResultType::ROW_NOT_FOUND),
+            QueryResult::RowAlreadyExists   => output.set_field_type(generated::query::QueryResultType::ROW_ALREADY_EXISTS),
+            QueryResult::PartialCommit      => output.set_field_type(generated::query::QueryResultType::PARTIAL_COMMIT),
+            QueryResult::NotImplemented     => output.set_field_type(generated::query::QueryResultType::NOT_IMPLEMENTED),
+            QueryResult::NetworkError       => output.set_field_type(generated::query::QueryResultType::NETWORK_ERROR),
+            QueryResult::InternalError      => output.set_field_type(generated::query::QueryResultType::INTERNAL_ERROR),
+            QueryResult::Data{columns: c}   => {
+                output.set_columns(protobuf::RepeatedField::from_iter(
+                    c.into_iter()
+                        .map(|c| {
+                            let mut x = generated::query::ResultColumn::new();
+                            x.set_has_data(c.is_some());
+                            if let Some(data) = c {
+                                x.set_data(data);
+                            }
+                            x
+                        }
+                )));
                 output.set_field_type(generated::query::QueryResultType::DATA);
             }
         }
@@ -276,7 +304,7 @@ mod tests {
     fn can_print_update() {
         let q = super::Query::new_update(
             "row1",
-            vec![MUpdate::new("test", vec![120, 121])]
+            vec![super::MUpdate::new("test", vec![120, 121])]
         );
 
         assert_eq!(
@@ -289,7 +317,7 @@ mod tests {
     fn can_print_insert() {
         let q = super::Query::new_insert(
             "row1",
-            vec![MUpdate::new("test", vec![120, 121])]
+            vec![super::MUpdate::new("test", vec![120, 121])]
         );
 
         assert_eq!(

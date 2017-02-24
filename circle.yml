@@ -22,6 +22,7 @@ test:
   override:
     - ~/.cargo/bin/cargo test --bin largetable-cli
     - ~/.cargo/bin/cargo test --bin largetable
+    - ~/.cargo/bin/cargo test --lib
   post:
     # Upload code coverage statement to codecov.io
     - rm ./target/debug/largetable*.d || true
