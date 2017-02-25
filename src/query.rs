@@ -264,6 +264,12 @@ impl fmt::Display for QueryResult {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap as Map;
+    use std::iter::FromIterator;
+    use protobuf;
+    use protobuf::Message;
+    use generated;
+
     #[test]
     fn can_print_select() {
         let q = super::Query::new_select(
@@ -275,6 +281,63 @@ mod tests {
             format!("{}", q),
             r#"{"select":{"row":"row1","get":["test","column2","col3"]}}"#
         )
+    }
+
+    // This function takes a query, converts it back and forth to a
+    // protobuf-compatible query, and checks that it is still the same.
+    fn query_conversion_is_valid(q: super::Query) {
+        let repr = format!("{}", q);
+        let mut bytes = vec![];
+        q.write_to_writer(&mut bytes).unwrap();
+        let recovered = super::Query::from_bytes(&mut bytes.as_slice()).unwrap();
+        assert_eq!(
+            repr,
+            format!("{}", recovered)
+        );
+        let mut bytes2 = vec![];
+        recovered.write_to_writer(&mut bytes2).unwrap();
+        assert_eq!(bytes, bytes2);
+    }
+
+    fn queryresult_conversion_is_valid(q: super::QueryResult) {
+        let repr = format!("{}", q);
+        let mut bytes = vec![];
+        q.into_generated().write_to_writer(&mut bytes).unwrap();
+        let converted_generated = protobuf::parse_from_bytes::<generated::query::QueryResult>(&mut bytes.as_slice()).unwrap();
+        let recovered = super::QueryResult::from_generated(converted_generated);
+        assert_eq!(
+            repr,
+            format!("{}", recovered)
+        );
+        let mut bytes2 = vec![];
+        recovered.into_generated().write_to_writer(&mut bytes2).unwrap();
+        assert_eq!(bytes, bytes2);
+    }
+
+    #[test]
+    fn can_convert_queryresult_to_bytes() {
+        queryresult_conversion_is_valid(super::QueryResult::Done);
+        queryresult_conversion_is_valid(super::QueryResult::RowNotFound);
+        queryresult_conversion_is_valid(super::QueryResult::RowAlreadyExists);
+        queryresult_conversion_is_valid(super::QueryResult::NetworkError);
+        queryresult_conversion_is_valid(super::QueryResult::InternalError);
+        queryresult_conversion_is_valid(super::QueryResult::NotImplemented);
+        queryresult_conversion_is_valid(super::QueryResult::PartialCommit);
+        queryresult_conversion_is_valid(super::QueryResult::Data{columns: vec![Some(String::from("this is a test").into_bytes())]});
+        queryresult_conversion_is_valid(super::QueryResult::Data{columns: vec![None]});
+    }
+
+    #[test]
+    fn can_convert_query_to_bytes() {
+        query_conversion_is_valid(super::Query::Insert{row: String::from("test"), set: Map::new()});
+
+        let data = vec![
+            ("c@#$%^&*()".to_string(),  String::from("caDS{").into_bytes())
+        ];
+        let set = Map::<String, Vec<u8>>::from_iter(data);
+        query_conversion_is_valid(super::Query::Insert{row: String::from("QW_#F)A"), set: set.clone()});
+        query_conversion_is_valid(super::Query::Update{row: String::from("!@)#!!D"), set: set.clone()});
+        query_conversion_is_valid(super::Query::Select{row: String::from("!@)#!!D"), get: vec![String::from("abcdef")]});
     }
 
     #[test]
