@@ -198,9 +198,10 @@ impl QueryResult {
                 QueryResult::Data{
                     columns: q.take_columns().into_iter()
                         .map(|mut r| {
-                            match r.get_has_data() {
-                                true => Some(r.take_data()),
-                                false => None
+                            if r.get_has_data() {
+                                Some(r.take_data())
+                            } else {
+                                None
                             }
                         }).collect::<Vec<_>>()
                 },

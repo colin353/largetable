@@ -41,7 +41,7 @@ impl Handler for RequestHandler {
                     },
                     Err(_)  => {
                         println!("query: invalid data");
-                        res.start().unwrap().write("invalid data".as_bytes()).unwrap();
+                        res.start().unwrap().write_all(b"invalid data").unwrap();
                     }
                 };
             },
