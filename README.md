@@ -13,7 +13,9 @@ hoping to work out as they arise.
 
 Things I'd like to do pretty soon:
 
-- [ ] Build a server and client binary which interact via HTTP
+- [x] Build a server and client binary which interact via HTTP
+- [ ] Build a docker image and do integration tests with it
+- [ ] Allow for YAML configuration files + environment variables
 - [ ] Row and column deletion queries
 - [ ] Generate a timestamped log of activity with configurable verbosity
 - [x] Commit log
