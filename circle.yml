@@ -18,11 +18,14 @@ dependencies:
     # This install will fail if we have a valid cache, but that's okay.
     - cargo install protobuf || true
     - protoc --rust_out src/generated src/protobuf/dtable.proto
+    - protoc --rust_out src/generated src/protobuf/query.proto
 test:
   override:
     - ~/.cargo/bin/cargo test --bin largetable-cli
+    - ~/.cargo/bin/cargo test --bin largetable
+    - ~/.cargo/bin/cargo test --lib
   post:
     # Upload code coverage statement to codecov.io
-    - rm ./target/debug/largetable*.d
+    - rm ./target/debug/largetable*.d || true
     - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --include-pattern=largetable --verify "target/cov/$(basename $file)" "$file"; done
     - bash <(curl -s https://codecov.io/bash)

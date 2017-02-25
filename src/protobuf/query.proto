@@ -6,9 +6,30 @@ enum QueryType {
   INSERT = 2;
 }
 
+enum QueryResultType {
+  OK = 0;
+  ROW_NOT_FOUND = 1;
+  ROW_ALREADY_EXISTS = 2;
+  DATA = 3;
+  INTERNAL_ERROR = 4;
+  PARTIAL_COMMIT = 5;
+  NOT_IMPLEMENTED = 6;
+  NETWORK_ERROR = 7;
+}
+
 message Query {
   QueryType type = 1;
   string row = 2;
   repeated string columns = 3;
   map<string, bytes> values = 4;
+}
+
+message ResultColumn {
+  bool has_data = 1;
+  bytes data = 2;
+}
+
+message QueryResult {
+  QueryResultType type = 1;
+  repeated ResultColumn columns = 2;
 }
