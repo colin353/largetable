@@ -18,6 +18,7 @@ dependencies:
     # This install will fail if we have a valid cache, but that's okay.
     - cargo install protobuf || true
     - protoc --rust_out src/generated src/protobuf/dtable.proto
+    - protoc --rust_out src/generated src/protobuf/query.proto
 test:
   override:
     - ~/.cargo/bin/cargo test --bin largetable-cli
