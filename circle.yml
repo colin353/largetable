@@ -18,6 +18,9 @@ dependencies:
     # This install will fail if we have a valid cache, but that's okay.
     - cargo install protobuf || true
     - protoc --rust_out src/generated src/protobuf/dtable.proto
+    # Now we'll build the docker image.
+    - cargo build --release --target=x86_64-unknown-linux-musl --bin largetable
+    - docker build --rm=false -t colinmerkel/largetable:$CIRCLE_SHA1 .
 test:
   override:
     - ~/.cargo/bin/cargo test --bin largetable-cli
