@@ -7,6 +7,7 @@ authors = ["Colin Merkel <colin.merkel@gmail.com>"]
 protobuf = { git = "https://github.com/stepancheg/rust-protobuf" }
 serde = "0.9"
 serde_json = "0.9"
+serde_yaml = "0.6"
 serde_derive = "0.9"
 linefeed = "0.2.2"
 glob = "0.2"

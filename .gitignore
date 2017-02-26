@@ -3,6 +3,8 @@ data
 src/generated
 .DS_Store
 
+config/config.yml
+
 *.DS_Store
 .AppleDouble
 .LSOverride
