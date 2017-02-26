@@ -10,6 +10,7 @@ use std::fmt;
 use std::env;
 use std::fs::File;
 use serde_yaml;
+use serde_json;
 
 #[derive(Debug, Deserialize)]
 pub enum Mode {
@@ -51,7 +52,10 @@ impl ApplicationConfig {
     pub fn from_yaml(filename: &str) -> Result<ApplicationConfig, io::Error> {
         let mut config: ApplicationConfig = match File::open(filename) {
             Ok(f)   => serde_yaml::from_reader(f).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("failed to parse YAML in config file: {}", e)))?,
-            Err(_)  => serde_yaml::from_str("").unwrap()
+
+            // If the config.yml file doesn't exist, we'll just use a default-valued
+            // configuration struct.
+            Err(_)  => serde_json::from_str("{}").unwrap()
         };
 
         // We also want to override the parameters with environment
