@@ -49,7 +49,6 @@ impl ApplicationConfig {
     // This function will try to read the given filename, decode the
     // contents as YAML, and read it into an ApplicationConfig struct.
     pub fn from_yaml(filename: &str) -> Result<ApplicationConfig, io::Error> {
-        let f = File::open(filename)?;
         let mut config: ApplicationConfig = match File::open(filename) {
             Ok(f)   => serde_yaml::from_reader(f).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("failed to parse YAML in config file: {}", e)))?,
             Err(_)  => serde_yaml::from_str("").unwrap()

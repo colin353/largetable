@@ -35,3 +35,10 @@ test:
     - rm ./target/debug/largetable*.d || true
     - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --include-pattern=largetable --verify "target/cov/$(basename $file)" "$file"; done
     - bash <(curl -s https://codecov.io/bash)
+deployment:
+  hub:
+    branch: docker
+    commands:
+      # Save the image to docker hub.
+      - docker login -e $DOCDKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker push colinmerkel/largetable:$CIRCLE_SHA1

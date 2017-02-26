@@ -17,6 +17,7 @@ time = "0.1"
 rand = "0.3"
 clippy = {version = "*", optional = true}
 hyper = "0.10.0"
+getopts = "0.2"
 
 [features]
 default = []
