@@ -12,7 +12,7 @@
 # Mode: set this parameter to "test" for testing,
 # and "production" otherwise. In test mode, it will
 # not store data persistently between runs.
-mode: production
+mode: Production
 
 # Default port that the service runs on.
 port: 8080

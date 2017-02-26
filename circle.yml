@@ -40,5 +40,5 @@ deployment:
     branch: docker
     commands:
       # Save the image to docker hub.
-      - docker login -e $DOCDKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
       - docker push colinmerkel/largetable:$CIRCLE_SHA1

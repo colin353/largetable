@@ -56,7 +56,7 @@ impl Handler for RequestHandler {
 fn main() {
     println!("largetable v{}", env!("CARGO_PKG_VERSION"));
 
-    println!("loading config file ./config/default.yml");
+    println!("loading config file ./config/config.yml");
     let config = config::ApplicationConfig::from_yaml(
         "./config/config.yml"
     ).unwrap();
