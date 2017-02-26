@@ -11,10 +11,10 @@ cd ~/cache
 
 if [ ! -f ~/cache/binutils-2.27.90 ]; then
   wget ftp://sourceware.org/pub/binutils/snapshots/binutils-2.27.90.tar.bz2
-  tar xjvf binutils-2.27.90.tar.bz2
+  tar xjf binutils-2.27.90.tar.bz2
   cd binutils-2.27.90
-  ./configure
-  make
+  ./configure >/dev/null 2>&1
+  make >/dev/null 2>&1
 fi
 cd ~/cache/binutils-2.27.90
-sudo make install
+sudo make install >/dev/null 2>&1

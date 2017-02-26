@@ -13,6 +13,7 @@ extern crate largeclient;
 
 use largeclient::query as query;
 use std::env;
+use std::io;
 
 mod generated;
 
@@ -23,11 +24,68 @@ fn print_usage(program: &str, opts: getopts::Options) {
     print!("{}", opts.usage(&brief));
 }
 
+struct StdinSource {}
+
+trait LineSource {
+    fn next_line(&mut self) -> Option<String>;
+}
+
+impl LineSource for StdinSource {
+    fn next_line(&mut self) -> Option<String> {
+        let mut line = String::new();
+        match io::stdin().read_line(&mut line) {
+            Ok(0) => None,
+            Ok(_) => {
+                Some(line)
+            },
+            Err(_) => None
+        }
+    }
+}
+
+impl StdinSource {
+    fn new() -> StdinSource {
+        StdinSource{}
+    }
+}
+
+struct CLISource {
+    reader: Reader<linefeed::terminal::DefaultTerminal>
+}
+
+impl LineSource for CLISource {
+    fn next_line(&mut self) -> Option<String> {
+        match self.reader.read_line() {
+            Ok(ReadResult::Input(input)) => {
+                // Record the command history, if the command isn't blank.
+                if !input.trim().is_empty() {
+                    &self.reader.add_history(input.clone());
+                }
+                Some(input)
+            },
+            Ok(_) => None,
+            Err(_) => None
+        }
+    }
+}
+
+impl CLISource {
+    fn new() -> CLISource {
+        println!("largetable-cli v{}", env!("CARGO_PKG_VERSION"));
+        let mut reader = Reader::new("largetable").unwrap();
+        reader.set_prompt("largetable> ");
+        CLISource{
+            reader: reader
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
 
     let mut opts = getopts::Options::new();
+    opts.optflag("s", "stdin", "read input from stdin");
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("v", "version", "print the version number");
 
@@ -51,22 +109,17 @@ fn main() {
         return;
     };
 
-    // If we reach this section of the code, the arguments appear valid.
-    // So we'll start the CLI and connect to the provided hostname.
-    println!("largetable-cli v{}", env!("CARGO_PKG_VERSION"));
-    let mut reader = Reader::new("largetable").unwrap();
-    reader.set_prompt("largetable> ");
+    let mut source: Box<LineSource> = if matches.opt_present("s") {
+        Box::new(StdinSource::new())
+    } else {
+        Box::new(CLISource::new())
+    };
 
     let client = largeclient::LargeClient::new(hostname.as_str()).unwrap();
 
-    while let Ok(ReadResult::Input(input)) = reader.read_line() {
-        // Record the command history, if the command isn't blank.
-        if !input.trim().is_empty() {
-            reader.add_history(input.clone());
-        }
-
+    while let Some(ref input) = source.next_line() {
         // Read the input and process the query.
-        match &input {
+        match input.as_str() {
             x if x == "exit" => {
                 println!("bye!");
                 break;
@@ -75,7 +128,7 @@ fn main() {
                 match query::Query::parse(x) {
                     Ok(q)   => {
                         // Submit the query to the database.
-                        println!("response <-, {}", client.query(q));
+                        println!("{}", client.query(q));
                     }
                     Err(_)  => println!("That didn't parse.")
                 }

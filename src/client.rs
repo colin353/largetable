@@ -25,7 +25,7 @@ pub enum ClientError {
 impl LargeClient {
     pub fn new(hostname: &str) -> Result<LargeClient, ClientError> {
         Ok(LargeClient{
-            hostname: hyper::Url::parse(hostname)
+            hostname: hyper::Url::parse(format!("http://{}",hostname).as_str())
                 .map_err(|_| ClientError::ConfigurationError)?
         })
     }
@@ -33,11 +33,11 @@ impl LargeClient {
     pub fn query(&self, q: query::Query) -> query::QueryResult {
         let req = match hyper::client::request::Request::new(
             hyper::method::Method::Post,
-            self.hostname.clone()
+            self.hostname.to_owned()
         ) {
             Ok(r) => r,
-            Err(_) => {
-                println!("failed to create request.");
+            Err(e) => {
+                println!("failed to create request: {} (hostname={})", e, self.hostname.clone());
                 return query::QueryResult::NetworkError
             }
         };
