@@ -2,7 +2,7 @@ FROM scratch
 MAINTAINER Colin Merkel <colinmerkel@podkarma.com>
 
 # Add the application binary.
-ADD target/release/largetable /
+ADD target/x86_64-unknown-linux-musl/release/largetable /
 
 # Add the supplementary files.
 ADD config /config
