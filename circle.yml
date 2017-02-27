@@ -33,7 +33,7 @@ test:
     - ~/.cargo/bin/cargo test --lib
     # Run a test of the CLI and docker container running together.
     - ~/.cargo/bin/cargo build --bin largetable-cli
-    - docker run -p 8080:8080 colinmerkel/largetable:$CIRCLE_SHA1
+    - docker run -d -p 8080:8080 colinmerkel/largetable:$CIRCLE_SHA1
     - circleci/test_cli.sh
   post:
     # Upload code coverage statement to codecov.io
