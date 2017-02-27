@@ -27,9 +27,14 @@ dependencies:
     - docker build --rm=false -t colinmerkel/largetable:$CIRCLE_SHA1 .
 test:
   override:
+    # Run rust's internal unit tests for each component.
     - ~/.cargo/bin/cargo test --bin largetable-cli
     - ~/.cargo/bin/cargo test --bin largetable
     - ~/.cargo/bin/cargo test --lib
+    # Run a test of the CLI and docker container running together.
+    - ~/.cargo/bin/cargo build --bin largetable-cli
+    - docker run -p 8080:8080 colinmerkel/largetable:$CIRCLE_SHA1
+    - circleci/test_cli.sh
   post:
     # Upload code coverage statement to codecov.io
     - rm ./target/debug/largetable*.d || true
