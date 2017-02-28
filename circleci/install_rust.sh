@@ -12,4 +12,5 @@ if [ ! -f ~/.cargo/bin/rustc ]; then
   curl https://sh.rustup.rs -sSf | sh /dev/stdin -y
 fi
 
-rustup default nightly
+rustup default beta
+rustup target add x86_64-unknown-linux-musl

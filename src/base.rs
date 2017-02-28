@@ -56,7 +56,6 @@ impl Base {
         }
     }
 
-    #[cfg(test)]
     // new_stub creates a database based in the /tmp/largetable directory.
     // It'll ensure that the directory is cleared out before before initializing
     // so it has a blank slate.

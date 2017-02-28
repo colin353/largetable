@@ -1,0 +1,21 @@
+# This example configuration file contains the default
+# configuration values for the software. If you
+# want to override them, you have to options:
+#
+#   1. Rename this file to config.yml and edit the
+#      parameters.
+#
+#   2. Set environment variables using the prefix
+#      LARGETABLE_ and in uppercase, for example,
+#      LARGETABLE_PORT. Those will take priority.
+
+# Mode: set this parameter to "test" for testing,
+# and "production" otherwise. In test mode, it will
+# not store data persistently between runs.
+mode: Production
+
+# Default port that the service runs on.
+port: 8080
+
+# The directory that persistent data should be written to.
+datadirectory: /data

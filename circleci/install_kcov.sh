@@ -2,8 +2,8 @@
 #
 #   install_kcov.sh
 #
-#   This script installs protobuf if it isn't already
-#   installed, by downloading it from Google.
+#   This script installs kcov, which is the rust
+#   coverage measurement tool.
 
 set -e
 cd

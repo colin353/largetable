@@ -1,12 +1,13 @@
 [package]
 name = "largetable"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Colin Merkel <colin.merkel@gmail.com>"]
 
 [dependencies]
 protobuf = { git = "https://github.com/stepancheg/rust-protobuf" }
 serde = "0.9"
 serde_json = "0.9"
+serde_yaml = "0.6"
 serde_derive = "0.9"
 linefeed = "0.2.2"
 glob = "0.2"
@@ -16,6 +17,7 @@ time = "0.1"
 rand = "0.3"
 clippy = {version = "*", optional = true}
 hyper = "0.10.0"
+getopts = "0.2"
 
 [features]
 default = []

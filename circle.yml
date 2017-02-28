@@ -1,4 +1,6 @@
 machine:
+  services:
+    - docker
   environment:
     PATH: $PATH:/home/ubuntu/.cargo/bin
 dependencies:
@@ -15,17 +17,32 @@ dependencies:
     - circleci/install_protobuf.sh
     - circleci/install_rust.sh
     - circleci/install_kcov.sh
+    - circleci/install_binutils.sh
     # This install will fail if we have a valid cache, but that's okay.
     - cargo install protobuf || true
     - protoc --rust_out src/generated src/protobuf/dtable.proto
     - protoc --rust_out src/generated src/protobuf/query.proto
+    # Now we'll build the docker image.
+    - cargo build --release --target=x86_64-unknown-linux-musl --bin largetable
+    - docker build --rm=false -t colinmerkel/largetable:$CIRCLE_SHA1 .
 test:
   override:
-    - ~/.cargo/bin/cargo test --bin largetable-cli
-    - ~/.cargo/bin/cargo test --bin largetable
-    - ~/.cargo/bin/cargo test --lib
+    # Run the docker container, which is used in the integration tests.
+    - docker run -d -p 8080:8080 colinmerkel/largetable:$CIRCLE_SHA1
+    # Run rust's internal unit tests for each component.
+    - ~/.cargo/bin/cargo test
+    # Run a test of the CLI and docker container running together.
+    - ~/.cargo/bin/cargo build --bin largetable-cli
+    - circleci/test_cli.sh
   post:
     # Upload code coverage statement to codecov.io
     - rm ./target/debug/largetable*.d || true
-    - for file in target/debug/largetable*; do mkdir -p "target/cov/$(basename $file)"; kcov --include-pattern=largetable --verify "target/cov/$(basename $file)" "$file"; done
-    - bash <(curl -s https://codecov.io/bash)
+    - rm ./target/debug/largetable
+    - ./circleci/generate_coverage.sh
+deployment:
+  hub:
+    branch: docker
+    commands:
+      # Save the image to docker hub.
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker push colinmerkel/largetable:$CIRCLE_SHA1

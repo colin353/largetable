@@ -6,6 +6,7 @@ extern crate protobuf;
 
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_yaml;
 extern crate serde_json;
 extern crate rand;
 extern crate time;
@@ -23,10 +24,12 @@ use std::sync::Mutex;
 use protobuf::Message;
 
 mod base;
+mod config;
 mod generated;
 
 struct RequestHandler {
-    database: Mutex<base::Base>
+    database: Mutex<base::Base>,
+    config: config::ApplicationConfig
 }
 
 impl Handler for RequestHandler {
@@ -51,15 +54,26 @@ impl Handler for RequestHandler {
 }
 
 fn main() {
-    let mut database = base::Base::new("./data/");
+    println!("largetable v{}", env!("CARGO_PKG_VERSION"));
+
+    println!("loading config file ./config/config.yml");
+    let config = config::ApplicationConfig::from_yaml(
+        "./config/config.yml"
+    ).unwrap();
+
+    println!("loading database, mode = {}", config.mode);
+    let mut database = match config.mode {
+        config::Mode::Testing       => base::Base::new_stub(),
+        config::Mode::Production    => base::Base::new(config.datadirectory.as_str())
+    };
+
     database.load().unwrap();
 
     let h = RequestHandler{
-        database: Mutex::new(database)
+        database: Mutex::new(database),
+        config: config
     };
 
-
-    println!("largetable v{}", env!("CARGO_PKG_VERSION"));
-
-    Server::http("0.0.0.0:8080").unwrap().handle(h).unwrap();
+    println!("Listening on port {}.", h.config.port);
+    Server::http(format!("0.0.0.0:{}", h.config.port)).unwrap().handle(h).unwrap();
 }
