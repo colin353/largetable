@@ -135,7 +135,6 @@ impl MTable {
     pub fn write_to_writer(&self, data: &mut io::Write, header: &mut io::Write) -> Result<DTableHeader, io::Error> {
         let mut headers = vec![];
         let mut offset = 0;
-        let mut count = 0;
         for (key, row) in &self.rows {
             let length = row.write_to_writer(data)?;
             let mut h = DTableHeaderEntry::new();
@@ -143,10 +142,7 @@ impl MTable {
             h.set_key(String::from_str(key).unwrap());
             headers.push(h);
             offset += length;
-            count += 1;
         }
-
-        println!("Diagnostic: wrote {} lines in mtable to dtable.", count);
 
         let mut table_header = DTableHeader::new();
         table_header.set_entries(protobuf::RepeatedField::from_vec(headers));
