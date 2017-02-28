@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+#[cfg(test)]
+extern crate serde_yaml;
 extern crate protobuf;
 extern crate linefeed;
 extern crate glob;
