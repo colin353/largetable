@@ -34,11 +34,10 @@ impl LineSource for StdinSource {
     fn next_line(&mut self) -> Option<String> {
         let mut line = String::new();
         match io::stdin().read_line(&mut line) {
-            Ok(0) => None,
+            Ok(0) | Err(_) => None,
             Ok(_) => {
                 Some(line)
-            },
-            Err(_) => None
+            }
         }
     }
 }
@@ -59,12 +58,11 @@ impl LineSource for CLISource {
             Ok(ReadResult::Input(input)) => {
                 // Record the command history, if the command isn't blank.
                 if !input.trim().is_empty() {
-                    &self.reader.add_history(input.clone());
+                    self.reader.add_history(input.clone());
                 }
                 Some(input)
             },
-            Ok(_) => None,
-            Err(_) => None
+            _ => None
         }
     }
 }

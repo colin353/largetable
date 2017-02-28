@@ -36,11 +36,13 @@ pub struct Base {
     disktable_index: u32,
     memtable: mtable::MTable,
     disktables: Vec<dtable::DTable>,
-    commit_log: std::fs::File
+    commit_log: std::fs::File,
+    pub memtable_size_limit: usize,
+    pub disktable_limit: usize
 }
 
 impl Base {
-    pub fn new(directory: &str) -> Base {
+    pub fn new(directory: &str, memtable_size_limit: usize, disktable_limit: usize) -> Base {
         let log = std::fs::OpenOptions::new()
             .append(true)
             .create(true)
@@ -52,7 +54,9 @@ impl Base {
             disktable_index: 0,
             memtable: mtable::MTable::new(),
             disktables: vec![],
-            commit_log: log
+            commit_log: log,
+            memtable_size_limit: memtable_size_limit,
+            disktable_limit: disktable_limit
         }
     }
 
@@ -72,7 +76,9 @@ impl Base {
             disktable_index: 0,
             memtable: mtable::MTable::new(),
             disktables: vec![],
-            commit_log: log
+            commit_log: log,
+            memtable_size_limit: 10485760,
+            disktable_limit: 10
         }
     }
 
@@ -160,6 +166,14 @@ impl Base {
     // into a DTable, finally replacing the memtable with a new, blank one.
     pub fn empty_memtable(&mut self) -> Result<(), BaseError> {
         self.disktable_index += 1;
+
+        // First, need to check if creating this dtable will exceed
+        // the maximum number of dtables. If so, we'll first compactify
+        // the dtables together, then dump the memtable.
+        if self.disktables.len() + 1 > self.disktable_limit {
+            info!("Merging disktables before writing memtable to disk.");
+            self.merge_disktables()?;
+        }
 
         info!("Creating dtable header.");
         let mut h = std::fs::File::create(
@@ -289,9 +303,15 @@ impl Base {
         };
 
         match self.commit(row, &updates, timestamp) {
-            Ok(_)   => query::QueryResult::Done,
-            Err(_)  => query::QueryResult::PartialCommit
-        }
+            Ok(_)   => (),
+            Err(_)  => return query::QueryResult::PartialCommit
+        };
+
+        // Because we just completed a write, we should check if we have
+        // exceeded memory limits.
+        self.check_size_limits();
+
+        query::QueryResult::Done
     }
 
     #[cfg(test)]
@@ -316,9 +336,15 @@ impl Base {
         };
 
         match self.commit(row, &updates, timestamp) {
-            Ok(_)   => query::QueryResult::Done,
-            Err(_)  => query::QueryResult::PartialCommit
-        }
+            Ok(_)   => (),
+            Err(_)  => return query::QueryResult::PartialCommit
+        };
+
+        // Because we just completed a write, we should check if we have
+        // exceeded memory limits.
+        self.check_size_limits();
+
+        query::QueryResult::Done
     }
 
     pub fn select(&self, row: &str, cols: &[&str], timestamp: u64) -> query::QueryResult {
@@ -363,6 +389,16 @@ impl Base {
                     }
                 }).collect::<Vec<_>>()
             }
+        }
+    }
+
+    // This function checks if the memtable size limit has been exceeded
+    // by the most recent write, and if so, we'll dump the memtable to disk.
+    pub fn check_size_limits(&mut self) {
+        info!("mentable: {} KiB", self.memtable.size/1024);
+
+        if self.memtable.size > self.memtable_size_limit {
+            self.empty_memtable().unwrap();
         }
     }
 }
@@ -562,7 +598,7 @@ mod tests {
 
         // Load up the new database using the old directory, and load in the
         // dtable files from that run.
-        let mut database = super::Base::new(&directory);
+        let mut database = super::Base::new(&directory, 32 * (1<<20), 3);
         database.load().unwrap();
 
         assert_eq!(
@@ -573,7 +609,7 @@ mod tests {
 
     #[test]
     fn test_insert() {
-        let mut database = super::Base::new("./data");
+        let mut database = super::Base::new("./data", 32 * (1<<20), 3);
 
         let done = format!("{}", query::QueryResult::Done);
         let row_not_found = format!("{}", query::QueryResult::RowNotFound);
@@ -711,6 +747,39 @@ mod tests {
             database.str_query(r#"{"select": {"row": "my_test_row","get": ["status"]}}"#),
             r#"Data: ["OK"]"#
         );
+    }
+
+    // This function tests automatic minor compaction by setting a low
+    // memtable memory limit, then overflowing it by writing a bunch of
+    // data. If successful, it'll cause the server to write the memtable
+    // to disk.
+    #[test]
+    fn automatic_minor_compaction() {
+        let mut database = super::Base::new_stub();
+        database.disktable_limit = 2;
+        database.memtable_size_limit = 5120; // max memory: 5 KiB.
+
+        // Now we'll compose a query which doesn't overflow the data.
+        database.query_now(query::Query::new_insert(
+            "nonexistant_row",
+            vec![query::MUpdate::new("data", vec![0; 1024])]
+        ));
+
+        assert_eq!(database.memtable.size, 1028);
+
+        // Now we'll overflow it, forcing a disktable write. That'll
+        // leave us with an empty memtable and one disktable.
+        database.query_now(query::Query::new_insert(
+            "yet another row",
+            vec![query::MUpdate::new("data", vec![0; 5120])]
+        ));
+
+        assert_eq!(database.memtable.size, 0);
+        assert_eq!(database.disktables.len(), 1);
+    }
+
+    #[test]
+    fn automatic_major_compaction() {
     }
 
     #[test]

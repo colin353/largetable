@@ -38,13 +38,20 @@ pub struct ApplicationConfig {
     #[serde(default="default_port")]
     pub port: u32,
     #[serde(default="default_directory")]
-    pub datadirectory: String
+    pub datadirectory: String,
+    #[serde(default="default_memtable_size_limit")]
+    pub memtable_size_limit: usize,
+    #[serde(default="default_disktable_limit")]
+    pub disktable_limit: usize
 }
 
-// These three functions set the default values of the
+// These three functions set the default values of the config
+// values.
 fn default_mode() -> Mode { Mode::Production }
 fn default_port() -> u32 { 8080 }
 fn default_directory() -> String { String::from("./data") }
+fn default_memtable_size_limit() -> usize { 32 * (1 << 20) }
+fn default_disktable_limit() -> usize { 2 }
 
 impl ApplicationConfig {
     // This function will try to read the given filename, decode the
@@ -78,6 +85,14 @@ impl ApplicationConfig {
 
         if let Ok(value) = env::var("LARGETABLE_DATADIRECTORY") {
             config.datadirectory = value;
+        }
+
+        if let Ok(value) = env::var("LARGETABLE_DISKTABLE_LIMIT") {
+            config.disktable_limit = value.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid value specified for LARGETABLE_DISKTABLE_LIMIT."))?;
+        }
+
+        if let Ok(value) = env::var("LARGETABLE_MEMTABLE_SIZE_LIMIT") {
+            config.memtable_size_limit = value.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid value specified for LARGETABLE_MEMTABLE_SIZE_LIMIT."))?;
         }
 
         Ok(config)

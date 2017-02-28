@@ -72,8 +72,17 @@ fn main() {
 
     info!("loading database, mode = {}", config.mode);
     let mut database = match config.mode {
-        config::Mode::Testing       => base::Base::new_stub(),
-        config::Mode::Production    => base::Base::new(config.datadirectory.as_str())
+        config::Mode::Testing       => {
+            let mut base = base::Base::new_stub();
+            base.disktable_limit = config.disktable_limit;
+            base.memtable_size_limit = config.memtable_size_limit;
+            base
+        },
+        config::Mode::Production    => base::Base::new(
+            config.datadirectory.as_str(),
+            config.memtable_size_limit,
+            config.disktable_limit
+        )
     };
 
     database.load().unwrap();

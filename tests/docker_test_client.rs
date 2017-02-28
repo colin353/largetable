@@ -28,7 +28,9 @@ fn panics_invalid_connection_string() {
 
 #[test]
 fn can_connect_to_server() {
-    let client = largeclient::LargeClient::new(option_env!("LARGETABLE_DOCKER_SERVICE").unwrap_or("localhost:8080")).unwrap();
+    let hostname = option_env!("LARGETABLE_DOCKER_SERVICE").unwrap_or("localhost:8080");
+    println!("Trying to connect on hostname: {}", hostname);
+    let client = largeclient::LargeClient::new(hostname).unwrap();
     match client.query(largeclient::query::Query::parse(r#"{
             "select": { "row": "fake", "get": []}
         }"#).unwrap())
@@ -43,6 +45,6 @@ fn can_connect_to_server() {
         }"#).unwrap())
     {
         largeclient::query::QueryResult::Done => (),
-        _ => panic!("Query didn't return expected result.")
+        e => panic!("Query didn't return expected result: {}", e)
     };
 }

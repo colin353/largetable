@@ -19,3 +19,11 @@ port: 8080
 
 # The directory that persistent data should be written to.
 datadirectory: /data
+
+# Once the memtable reaches this size, we'll write
+# it to disk (in bytes).
+memtable_size_limit: 137438953472
+
+# Once there are more than this number of disktables, we'll
+# compactify them.
+disktable_limit: 2

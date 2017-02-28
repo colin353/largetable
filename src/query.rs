@@ -34,6 +34,11 @@ impl MUpdate {
             value: value
         }
     }
+
+    // Calculate the size of an update.
+    pub fn size(&self) -> usize {
+        self.value.len() + self.key.len()
+    }
 }
 
 // In order to support JSON parsing of queries, this struct is created

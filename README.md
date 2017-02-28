@@ -13,19 +13,19 @@ hoping to work out as they arise.
 
 Things I'd like to do pretty soon:
 
-- [ ] Generate a timestamped log of activity with configurable verbosity
+- [x] Generate a timestamped log of activity with configurable verbosity
 - [x] Build a server and client binary which interact via HTTP
 - [x] Build a docker image and do integration tests with it
 - [x] Allow for YAML configuration files + environment variables
 - [ ] Row and column deletion queries
+- [ ] Garbage collection of old data
 - [x] Commit log
 - [x] Actual timestamps used in MUpdates, and use them for serving selects
 - [x] Measure code coverage with kcov
 - [x] Merging multiple DTables together into a single table
-- [ ] Automatically detecting when MTable is too large
-- [ ] Automatic minor compactions
-- [ ] Automatic major compaction
-- [ ] Garbage collection of old data
+- [x] Automatically detecting when MTable is too large
+- [x] Automatic minor compactions
+- [x] Automatic major compaction
 
 Medium term ideas:
 

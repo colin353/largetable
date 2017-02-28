@@ -25,7 +25,10 @@ pub struct MRow {
 }
 
 pub struct MTable {
-    rows: BTreeMap<String, MRow>
+    rows: BTreeMap<String, MRow>,
+
+    // size: represents the approximate size of the MTable, in bytes.
+    pub size: usize
 }
 
 impl MRow {
@@ -66,14 +69,15 @@ impl fmt::Display for MRow {
 
 impl MTable {
     pub fn new() -> MTable {
-        MTable{rows: BTreeMap::new()}
+        MTable{rows: BTreeMap::new(), size: 0}
     }
 
     pub fn update(&mut self, row: &str, updates: &[MUpdate], timestamp: u64) -> Result<(), dtable::TError>{
-        match self.rows.get_mut(row) {
-            None    => (),
-            Some(r) => return Ok(r.update(updates, timestamp))
-        };
+        if let Some(r) = self.rows.get_mut(row) {
+            // Update the size of the MTable after this change is written.
+            self.size += updates.iter().map(|u| u.size()).sum();
+            return Ok(r.update(updates, timestamp))
+        }
 
         self.insert(row, updates, timestamp)
     }
@@ -86,6 +90,9 @@ impl MTable {
         if self.rows.get(row).is_some() {
             return Err(dtable::TError::AlreadyExists);
         }
+
+        // Update the size of the MTable after this change is written.
+        self.size += updates.iter().map(|u| u.size()).sum();
 
         let r = MRow{
             columns: updates.into_iter().map(|update| {
@@ -101,7 +108,6 @@ impl MTable {
             }).collect()
         };
         self.rows.insert(row.to_string(), r);
-
         Ok(())
     }
 
