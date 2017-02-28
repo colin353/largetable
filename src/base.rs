@@ -780,6 +780,20 @@ mod tests {
 
     #[test]
     fn automatic_major_compaction() {
+        let mut database = super::Base::new_stub();
+        database.disktable_limit = 2;
+        database.memtable_size_limit = 5120; // max memory: 5 KiB.
+
+        for _ in 0..10 {
+            // Overflow the memtable and force a write to the disktable.
+            database.query_now(query::Query::new_insert(
+                "yet another row",
+                vec![query::MUpdate::new("data", vec![0; 5120])]
+            ));
+
+            assert!(database.disktables.len() <= 2, "Disktable limit exceeded.");
+            assert!(database.memtable.size <= 5120, "Memtable size limit exceeded.");
+        }
     }
 
     #[test]
