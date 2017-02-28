@@ -150,7 +150,7 @@ impl Base {
             self.disktables.push(
                 dtable::DTable::new(data.to_owned(), header_file).map_err(|_| BaseError::CorruptedFiles)?
             );
-            println!("Loaded dtable: {}", data);
+            info!("Loaded dtable: {}", data);
         }
 
         Ok(())
@@ -161,19 +161,19 @@ impl Base {
     pub fn empty_memtable(&mut self) -> Result<(), BaseError> {
         self.disktable_index += 1;
 
-        println!("Creating dtable header.");
+        info!("Creating dtable header.");
         let mut h = std::fs::File::create(
             format!("{}/{}.dtable.header", self.directory, self.disktable_index)
         ).map_err(|e| BaseError::Problem{
             reason: format!("Unable to create file: {}", e)
         })?;
 
-        println!("Creating dtable file.");
+        info!("Creating dtable file.");
         let mut f = std::fs::File::create(
             format!("{}/{}.dtable", self.directory, self.disktable_index)
         ).map_err(|_| BaseError::CorruptedFiles)?;
 
-        println!("Writing memtable to disk.");
+        info!("Writing memtable to disk.");
         let dheader = self.memtable.write_to_writer(&mut f, &mut h)
             .map_err(|_| BaseError::Problem{
                 reason: String::from("Unable to write DTable to disk.")
@@ -184,7 +184,7 @@ impl Base {
         f.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
         h.sync_all().map_err(|_| BaseError::CorruptedFiles)?;
 
-        println!("Emptying memtable.");
+        info!("Emptying memtable.");
         mem::replace(&mut self.memtable, mtable::MTable::new());
 
         self.disktables.push(dtable::DTable::from_dtableheader(
@@ -193,7 +193,7 @@ impl Base {
         ));
 
         // Delete the commit log, since we are writing it to disk.
-        println!("Truncating commit log.");
+        info!("Truncating commit log.");
         mem::replace(
             &mut self.commit_log,
             std::fs::File::create(format!("{}/commit.log", self.directory))

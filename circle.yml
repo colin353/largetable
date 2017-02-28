@@ -41,7 +41,7 @@ test:
     - ./circleci/generate_coverage.sh
 deployment:
   hub:
-    branch: docker
+    branch: master
     commands:
       # Save the image to docker hub.
       - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS

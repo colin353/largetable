@@ -1,11 +1,18 @@
-mod dtable;
-mod mtable;
-mod query;
+/*
+    main.rs
 
-extern crate protobuf;
+    This is the main entrypoint for the largetable server.
+*/
+
+//#![feature(rustc_private)]
+
+#[macro_use]
+extern crate log;
 
 #[macro_use]
 extern crate serde_derive;
+
+extern crate protobuf;
 extern crate serde_yaml;
 extern crate serde_json;
 extern crate rand;
@@ -20,12 +27,15 @@ use hyper::status::StatusCode;
 
 use std::io::Write;
 use std::sync::Mutex;
-
 use protobuf::Message;
 
 mod base;
 mod config;
 mod generated;
+mod mtable;
+mod dtable;
+mod query;
+mod logger;
 
 struct RequestHandler {
     database: Mutex<base::Base>,
@@ -38,12 +48,11 @@ impl Handler for RequestHandler {
             hyper::Post => {
                 match query::Query::from_bytes(&mut req) {
                     Ok(q)   => {
-                        println!("query: {}", q);
                         let result = self.database.lock().unwrap().query_now(q);
                         result.into_generated().write_to_writer(&mut res.start().unwrap()).unwrap();
                     },
                     Err(_)  => {
-                        println!("query: invalid data");
+                        info!("received query with invalid data");
                         res.start().unwrap().write_all(b"invalid data").unwrap();
                     }
                 };
@@ -55,13 +64,13 @@ impl Handler for RequestHandler {
 
 fn main() {
     println!("largetable v{}", env!("CARGO_PKG_VERSION"));
-
-    println!("loading config file ./config/config.yml");
+    logger::ApplicationLogger::init().unwrap();
+    info!("loading config file ./config/config.yml");
     let config = config::ApplicationConfig::from_yaml(
         "./config/config.yml"
     ).unwrap();
 
-    println!("loading database, mode = {}", config.mode);
+    info!("loading database, mode = {}", config.mode);
     let mut database = match config.mode {
         config::Mode::Testing       => base::Base::new_stub(),
         config::Mode::Production    => base::Base::new(config.datadirectory.as_str())
@@ -74,6 +83,6 @@ fn main() {
         config: config
     };
 
-    println!("Listening on port {}.", h.config.port);
+    info!("Listening on port {}.", h.config.port);
     Server::http(format!("0.0.0.0:{}", h.config.port)).unwrap().handle(h).unwrap();
 }

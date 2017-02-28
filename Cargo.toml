@@ -1,6 +1,6 @@
 [package]
 name = "largetable"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Colin Merkel <colin.merkel@gmail.com>"]
 
 [dependencies]
@@ -18,6 +18,7 @@ rand = "0.3"
 clippy = {version = "*", optional = true}
 hyper = "0.10.0"
 getopts = "0.2"
+log = "0.3.6"
 
 [features]
 default = []
