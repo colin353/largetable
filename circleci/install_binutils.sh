@@ -8,8 +8,7 @@
 
 set -e
 cd ~/cache
-
-if [ ! -f ~/cache/binutils-2.27.90 ]; then
+if [ ! -d ~/cache/binutils-2.27.90 ]; then
   wget ftp://sourceware.org/pub/binutils/snapshots/binutils-2.27.90.tar.bz2
   tar xjf binutils-2.27.90.tar.bz2
   cd binutils-2.27.90
