@@ -11,14 +11,12 @@ hoping to work out as they arise.
 
 ## Todo list
 
-Things I'd like to do pretty soon:
+Things that are already done:
 
 - [x] Generate a timestamped log of activity with configurable verbosity
 - [x] Build a server and client binary which interact via HTTP
 - [x] Build a docker image and do integration tests with it
 - [x] Allow for YAML configuration files + environment variables
-- [ ] Row and column deletion queries
-- [ ] Garbage collection of old data
 - [x] Commit log
 - [x] Actual timestamps used in MUpdates, and use them for serving selects
 - [x] Measure code coverage with kcov
@@ -26,15 +24,17 @@ Things I'd like to do pretty soon:
 - [x] Automatically detecting when MTable is too large
 - [x] Automatic minor compactions
 - [x] Automatic major compaction
+- [x] Handle selects with a fixed timestamp
 
 Medium term ideas:
 
+- [ ] Row and column deletion queries
+- [ ] Garbage collection of old data
 - [ ] Support for multithreaded operations
 - [ ] Performance testing with larger volumes of data
 - [ ] Compare performance with existing database systems
 - [ ] Flame graphs and checking where bottlenecks are
 - [ ] See how varying the number of workers changes perf
-- [ ] Handle selects with a fixed timestamp
 - [ ] Garbage collect historical data (perhaps when merging DTables?)
 
 Long term things that would be interesting to do:

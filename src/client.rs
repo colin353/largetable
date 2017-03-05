@@ -1,3 +1,5 @@
+#![feature(test)]
+
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -11,6 +13,9 @@ extern crate byteorder;
 extern crate time;
 extern crate rand;
 extern crate hyper;
+
+#[cfg(test)]
+extern crate test;
 
 pub mod query;
 mod generated;

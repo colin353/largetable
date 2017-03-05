@@ -3,14 +3,16 @@
 
     This is the main entrypoint for the largetable server.
 */
-
-//#![feature(rustc_private)]
+#![feature(test)]
 
 #[macro_use]
 extern crate log;
 
 #[macro_use]
 extern crate serde_derive;
+
+#[cfg(test)]
+extern crate test;
 
 extern crate protobuf;
 extern crate serde_yaml;

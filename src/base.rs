@@ -414,6 +414,7 @@ mod tests {
     use mtable;
     use rand::random;
     use std::u64;
+    use test;
 
     #[test]
     fn can_merge_disktables() {
@@ -827,5 +828,121 @@ mod tests {
             }
         }
 
+    }
+
+    fn create_default_database() -> super::Base {
+        let mut database = super::Base::new_stub();
+        database.load().unwrap();
+
+        for _ in 0..100 {
+            database.query_now(
+                query::Query::new_insert(random_string().as_str(), (0..100).map(|_| {
+                    query::MUpdate::new(random_string().as_str(), random_bytes())
+                }).collect::<Vec<_>>())
+            );
+        }
+
+        database.query_now(
+            query::Query::new_insert("test_row", (0..10).map(|_| {
+                query::MUpdate::new(random_string().as_str(), random_bytes())
+            }).collect::<Vec<_>>())
+        );
+
+        database.query_now(
+            query::Query::new_update("test_row", (0..10).map(|_| {
+                query::MUpdate::new("test_column", random_bytes())
+            }).collect::<Vec<_>>())
+        );
+
+        database.empty_memtable();
+
+        for _ in 0..100 {
+            database.query_now(
+                query::Query::new_insert(random_string().as_str(), (0..100).map(|_| {
+                    query::MUpdate::new(random_string().as_str(), random_bytes())
+                }).collect::<Vec<_>>())
+            );
+        }
+
+        database.query_now(
+            query::Query::new_insert("test_row", (0..10).map(|_| {
+                query::MUpdate::new(random_string().as_str(), random_bytes())
+            }).collect::<Vec<_>>())
+        );
+
+        database.query_now(
+            query::Query::new_update("test_row", (0..10).map(|_| {
+                query::MUpdate::new("test_column", random_bytes())
+            }).collect::<Vec<_>>())
+        );
+
+        database.empty_memtable();
+
+        for _ in 0..100 {
+            database.query_now(
+                query::Query::new_insert(random_string().as_str(), (0..100).map(|_| {
+                    query::MUpdate::new(random_string().as_str(), random_bytes())
+                }).collect::<Vec<_>>())
+            );
+        }
+
+        database.query_now(
+            query::Query::new_insert("test_row", (0..10).map(|_| {
+                query::MUpdate::new(random_string().as_str(), random_bytes())
+            }).collect::<Vec<_>>())
+        );
+
+        database.query_now(
+            query::Query::new_update("test_row", (0..10).map(|_| {
+                query::MUpdate::new("test_column", random_bytes())
+            }).collect::<Vec<_>>())
+        );
+
+        database
+    }
+
+    #[bench]
+    fn select(b: &mut test::Bencher) {
+        let mut database = create_default_database();
+
+        b.iter(|| {
+            database.query_now(
+                query::Query::new_select("test_row", &["test_column"])
+            );
+        });
+    }
+
+    #[bench]
+    fn insert(b: &mut test::Bencher) {
+        let mut database = create_default_database();
+
+        b.iter(|| {
+            database.query_now(
+                query::Query::new_insert(
+                    random_string().as_str(),
+                    vec![query::MUpdate::new(
+                        random_string().as_str(),
+                        random_bytes()
+                    )]
+                )
+            );
+        });
+    }
+
+    #[bench]
+    fn update(b: &mut test::Bencher) {
+        let mut database = create_default_database();
+
+        b.iter(|| {
+            database.query_now(
+                query::Query::new_update(
+                    random_string().as_str(),
+                    vec![query::MUpdate::new(
+                        random_string().as_str(),
+                        random_bytes()
+                    )]
+                )
+            );
+        });
     }
 }

@@ -276,6 +276,8 @@ mod tests {
     use protobuf::Message;
     use generated;
 
+    use test;
+
     #[test]
     fn can_print_select() {
         let q = super::Query::new_select(
@@ -402,5 +404,16 @@ mod tests {
         super::Query::parse(r#"{"update": { "row": "row1", "set": {} }}"#).unwrap();
         super::Query::parse(r#"{"update": { "row": "row1", "set": { "col5": "value" } }}"#).unwrap();
         super::Query::parse(r#"{"insert": { "row": "row1", "set": { "col5": "value", "col7": "value" } }}"#).unwrap();
+    }
+
+    #[bench]
+    fn query_parsing(b: &mut test::Bencher) {
+        b.iter(|| {
+            super::Query::parse(r#"{"select": { "row": "test 1 2 3", "get": [] }}"#).unwrap();
+            super::Query::parse(r#"{"select": { "row": "row1", "get": [ "col5" ] }}"#).unwrap();
+            super::Query::parse(r#"{"update": { "row": "row1", "set": {} }}"#).unwrap();
+            super::Query::parse(r#"{"update": { "row": "row1", "set": { "col5": "value" } }}"#).unwrap();
+            super::Query::parse(r#"{"insert": { "row": "row1", "set": { "col5": "value", "col7": "value" } }}"#).unwrap();
+        })
     }
 }
